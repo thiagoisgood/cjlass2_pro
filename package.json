@@ -1,0 +1,30 @@
+{
+  "name": "cjlass2-pro",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @cjlass2/api & npm run dev -w @cjlass2/web",
+    "dev:api": "npm run dev -w @cjlass2/api",
+    "dev:web": "npm run dev -w @cjlass2/web",
+    "build": "npm run build -ws --if-present",
+    "test": "npm run test -ws --if-present",
+    "lint": "npm run lint -ws --if-present",
+    "seed": "npm run seed -w @cjlass2/api",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  },
+  "overrides": {
+    "ajv": "^8.20.0"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "typescript": "^5.6.3"
+  }
+}

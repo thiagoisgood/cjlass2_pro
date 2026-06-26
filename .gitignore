@@ -1,0 +1,16 @@
+node_modules/
+apps/*/node_modules/
+dist/
+apps/*/dist/
+packages/*/dist/
+output/
+.playwright-cli/
+apps/**/test-results/
+__pycache__/
+*.pyc
+.claude/scheduled_tasks.lock
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example

@@ -1,0 +1,16 @@
+node_modules
+apps/*/node_modules
+packages/*/node_modules
+apps/*/dist
+packages/*/dist
+dist
+.playwright-cli
+.git
+.env
+.env.*
+output
+design/previews
+design/*.png
+resource
+npm-debug.log
+.DS_Store

@@ -1,0 +1,25 @@
+{
+  "name": "@cjlass2/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5173",
+    "lint": "vite build",
+    "test": "echo 'Frontend tests require running dev server. Use: npm run test:e2e'",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@cjlass2/shared": "1.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^6.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}
