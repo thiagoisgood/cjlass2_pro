@@ -62,6 +62,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      default:
+      web-gateway:
+        aliases:
+          - cjlass2-api
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -85,6 +90,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    networks:
+      default:
+      web-gateway:
+        aliases:
+          - cjlass2-web
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -98,3 +108,7 @@ services:
 
 volumes:
   postgres-data:
+
+networks:
+  web-gateway:
+    external: true
