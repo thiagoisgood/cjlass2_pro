@@ -984,71 +984,44 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
   }
 
   private async loadRelationalState(client: PoolClient, tenantId: string): Promise<AppSnapshot> {
-    const [
-      tenantResult,
-      userResult,
-      studentResult,
-      recordResult,
-      communicationResult,
-      lessonResult,
-      lessonLedgerResult,
-      orderResult,
-      paymentLedgerResult,
-      notificationResult,
-      deliveryResult,
-      taskResult,
-      checkResult,
-      effectResult,
-      templateResult,
-      auditResult,
-      docResult,
-      knowledgeChunkResult,
-      channelResult,
-      channelAccountResult,
-      channelMessageResult,
-      agentResult,
-      toolCallResult,
-      approvalResult,
-    ] = await Promise.all([
-      client.query("SELECT * FROM tenants WHERE id = $1", [tenantId]),
-      client.query("SELECT * FROM users WHERE tenant_id = $1 ORDER BY created_at ASC, id ASC", [tenantId]),
-      client.query("SELECT * FROM students WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]),
-      client.query("SELECT * FROM student_records WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]),
-      client.query("SELECT * FROM student_communications WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]),
-      client.query("SELECT * FROM lessons WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]),
-      client.query(
-        `SELECT lle.*, s.name AS student_name
-         FROM lesson_ledger_entries lle
-         LEFT JOIN students s ON s.id = lle.student_id
-         WHERE lle.tenant_id = $1
-         ORDER BY lle.occurred_at DESC, lle.id ASC`,
-        [tenantId],
-      ),
-      client.query("SELECT * FROM orders WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]),
-      client.query(
-        `SELECT ple.*, s.name AS student_name
-         FROM payment_ledger_entries ple
-         LEFT JOIN students s ON s.id = ple.student_id
-         WHERE ple.tenant_id = $1
-         ORDER BY ple.occurred_at DESC, ple.id ASC`,
-        [tenantId],
-      ),
-      client.query("SELECT * FROM notification_drafts WHERE tenant_id = $1 ORDER BY sort_order ASC, updated_at ASC", [tenantId]),
-      client.query("SELECT * FROM notification_deliveries WHERE tenant_id = $1 ORDER BY updated_at DESC, created_at DESC, id ASC", [tenantId]),
-      client.query("SELECT * FROM business_tasks WHERE tenant_id = $1 ORDER BY sort_order ASC, updated_at ASC", [tenantId]),
-      client.query("SELECT * FROM business_task_checks WHERE tenant_id = $1 ORDER BY sort_order ASC", [tenantId]),
-      client.query("SELECT * FROM business_task_effects WHERE tenant_id = $1 ORDER BY sort_order ASC", [tenantId]),
-      client.query("SELECT * FROM notification_templates WHERE tenant_id = $1 ORDER BY sort_order ASC, updated_at ASC", [tenantId]),
-      client.query("SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC, id ASC", [tenantId]),
-      client.query("SELECT * FROM knowledge_docs WHERE tenant_id = $1 ORDER BY updated_at_text DESC, id ASC", [tenantId]),
-      client.query("SELECT * FROM knowledge_chunks WHERE tenant_id = $1 ORDER BY doc_id ASC, chunk_index ASC, id ASC", [tenantId]),
-      client.query("SELECT * FROM channel_integrations WHERE tenant_id = $1 ORDER BY id ASC", [tenantId]),
-      client.query("SELECT * FROM channel_accounts WHERE tenant_id = $1 ORDER BY updated_at DESC, id ASC", [tenantId]),
-      client.query("SELECT * FROM channel_messages WHERE tenant_id = $1 ORDER BY received_at DESC, id ASC", [tenantId]),
-      client.query("SELECT * FROM agent_runs WHERE tenant_id = $1 ORDER BY created_at DESC, id ASC", [tenantId]),
-      client.query("SELECT * FROM agent_tool_calls WHERE tenant_id = $1 ORDER BY created_at DESC, id ASC", [tenantId]),
-      client.query("SELECT * FROM agent_approvals WHERE tenant_id = $1 ORDER BY created_at DESC, id ASC", [tenantId]),
-    ]);
+    const tenantResult = await client.query("SELECT * FROM tenants WHERE id = $1", [tenantId]);
+    const userResult = await client.query("SELECT * FROM users WHERE tenant_id = $1 ORDER BY created_at ASC, id ASC", [tenantId]);
+    const studentResult = await client.query("SELECT * FROM students WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]);
+    const recordResult = await client.query("SELECT * FROM student_records WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]);
+    const communicationResult = await client.query("SELECT * FROM student_communications WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]);
+    const lessonResult = await client.query("SELECT * FROM lessons WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]);
+    const lessonLedgerResult = await client.query(
+      `SELECT lle.*, s.name AS student_name
+       FROM lesson_ledger_entries lle
+       LEFT JOIN students s ON s.id = lle.student_id
+       WHERE lle.tenant_id = $1
+       ORDER BY lle.occurred_at DESC, lle.id ASC`,
+      [tenantId],
+    );
+    const orderResult = await client.query("SELECT * FROM orders WHERE tenant_id = $1 ORDER BY sort_order ASC, created_at ASC", [tenantId]);
+    const paymentLedgerResult = await client.query(
+      `SELECT ple.*, s.name AS student_name
+       FROM payment_ledger_entries ple
+       LEFT JOIN students s ON s.id = ple.student_id
+       WHERE ple.tenant_id = $1
+       ORDER BY ple.occurred_at DESC, ple.id ASC`,
+      [tenantId],
+    );
+    const notificationResult = await client.query("SELECT * FROM notification_drafts WHERE tenant_id = $1 ORDER BY sort_order ASC, updated_at ASC", [tenantId]);
+    const deliveryResult = await client.query("SELECT * FROM notification_deliveries WHERE tenant_id = $1 ORDER BY updated_at DESC, created_at DESC, id ASC", [tenantId]);
+    const taskResult = await client.query("SELECT * FROM business_tasks WHERE tenant_id = $1 ORDER BY sort_order ASC, updated_at ASC", [tenantId]);
+    const checkResult = await client.query("SELECT * FROM business_task_checks WHERE tenant_id = $1 ORDER BY sort_order ASC", [tenantId]);
+    const effectResult = await client.query("SELECT * FROM business_task_effects WHERE tenant_id = $1 ORDER BY sort_order ASC", [tenantId]);
+    const templateResult = await client.query("SELECT * FROM notification_templates WHERE tenant_id = $1 ORDER BY sort_order ASC, updated_at ASC", [tenantId]);
+    const auditResult = await client.query("SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC, id ASC", [tenantId]);
+    const docResult = await client.query("SELECT * FROM knowledge_docs WHERE tenant_id = $1 ORDER BY updated_at_text DESC, id ASC", [tenantId]);
+    const knowledgeChunkResult = await client.query("SELECT * FROM knowledge_chunks WHERE tenant_id = $1 ORDER BY doc_id ASC, chunk_index ASC, id ASC", [tenantId]);
+    const channelResult = await client.query("SELECT * FROM channel_integrations WHERE tenant_id = $1 ORDER BY id ASC", [tenantId]);
+    const channelAccountResult = await client.query("SELECT * FROM channel_accounts WHERE tenant_id = $1 ORDER BY updated_at DESC, id ASC", [tenantId]);
+    const channelMessageResult = await client.query("SELECT * FROM channel_messages WHERE tenant_id = $1 ORDER BY received_at DESC, id ASC", [tenantId]);
+    const agentResult = await client.query("SELECT * FROM agent_runs WHERE tenant_id = $1 ORDER BY created_at DESC, id ASC", [tenantId]);
+    const toolCallResult = await client.query("SELECT * FROM agent_tool_calls WHERE tenant_id = $1 ORDER BY created_at DESC, id ASC", [tenantId]);
+    const approvalResult = await client.query("SELECT * FROM agent_approvals WHERE tenant_id = $1 ORDER BY created_at DESC, id ASC", [tenantId]);
 
     const tenant = tenantResult.rows[0];
     const user = userResult.rows[0];
