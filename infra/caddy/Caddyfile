@@ -8,6 +8,7 @@
 	}
 
 	reverse_proxy /api/* api:3001
+	reverse_proxy /webhook webhook:9000
 	reverse_proxy web:5173 {
 		header_up Host 127.0.0.1:5173
 	}
