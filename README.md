@@ -334,7 +334,7 @@ DINGTALK_CLIENT_ID=your-client-id      # 钉钉
 # Agent
 HERMES_AGENT_URL=http://localhost:8080 # Hermes Agent 地址
 HERMES_AGENT_API_KEY=your-key          # Hermes/OpenAI-compatible API Key
-HERMES_MODEL=hermes                    # Hermes 模型名
+HERMES_MODEL=hermes                    # 可选；未设置时使用 Hermes 环境默认模型
 NOTIFICATION_PROVIDER_MODE=mock        # 测试模式
 ```
 
@@ -450,6 +450,19 @@ docker compose up -d
 # 查看日志
 docker compose logs -f api
 ```
+
+Compose 会同时启动 `edge`（Caddy）、`web`、`api`、`postgres`、`redis`。生产入口默认是 `https://<PUBLIC_DOMAIN>/`，Caddy 自动申请和续期 TLS 证书，将 `/api/` 反代到 API，其余请求反代到 Web；裸 IP 的 HTTP 访问会跳转到 `PUBLIC_DOMAIN`。前端生产构建建议使用同源 API：
+
+```bash
+VITE_API_BASE_URL=/api/v1
+PUBLIC_DOMAIN=<your-domain>
+PUBLIC_IP=<server-ip>
+CORS_ORIGIN=https://<your-domain>
+EDGE_HTTP_PORT=80
+EDGE_HTTPS_PORT=443
+```
+
+提交信息会决定是否触发部署，规则见 [docs/operations/deployment-policy.md](docs/operations/deployment-policy.md)。摘要：`[deploy] xxx` 强制部署，`[skip-deploy] xxx` 跳过部署，`[docs] xxx` 仅文档且跳过部署，其他 `main` 分支 push 默认部署。
 
 ### 生产配置
 

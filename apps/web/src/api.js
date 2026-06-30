@@ -17,10 +17,21 @@ async function request(path, options = {}) {
   });
   if (!response.ok) {
     const text = await response.text();
+    let readableMessage = `API request failed: ${response.status}`;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.message) {
+        readableMessage = Array.isArray(parsed.message)
+          ? parsed.message.join("；")
+          : parsed.message;
+      }
+    } catch {
+      if (text) readableMessage = text;
+    }
     if (response.status === 401) {
       clearAuthSession();
     }
-    const error = new Error(text || `API request failed: ${response.status}`);
+    const error = new Error(readableMessage);
     error.status = response.status;
     throw error;
   }

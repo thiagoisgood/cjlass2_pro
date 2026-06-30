@@ -51,32 +51,32 @@ CREATE INDEX IF NOT EXISTS reconciliation_runs_period_idx ON reconciliation_runs
 CREATE INDEX IF NOT EXISTS refunds_exceptional_idx ON refunds(tenant_id, exceptional, status);
 
 INSERT INTO financial_accounts (id, tenant_id, code, name, type, normal_balance, status)
-SELECT tenant_id || '-acct-bank', tenant_id, '1002', '银行存款', 'asset', 'debit', 'active'
+SELECT id || '-acct-bank', id, '1002', '银行存款', 'asset', 'debit', 'active'
 FROM tenants
 ON CONFLICT (tenant_id, code) DO NOTHING;
 
 INSERT INTO financial_accounts (id, tenant_id, code, name, type, normal_balance, status)
-SELECT tenant_id || '-acct-receivable', tenant_id, '1122', '应收账款', 'asset', 'debit', 'active'
+SELECT id || '-acct-receivable', id, '1122', '应收账款', 'asset', 'debit', 'active'
 FROM tenants
 ON CONFLICT (tenant_id, code) DO NOTHING;
 
 INSERT INTO financial_accounts (id, tenant_id, code, name, type, normal_balance, status)
-SELECT tenant_id || '-acct-income', tenant_id, '6001', '课程收入', 'income', 'credit', 'active'
+SELECT id || '-acct-income', id, '6001', '课程收入', 'income', 'credit', 'active'
 FROM tenants
 ON CONFLICT (tenant_id, code) DO NOTHING;
 
 INSERT INTO financial_accounts (id, tenant_id, code, name, type, normal_balance, status)
-SELECT tenant_id || '-acct-refund', tenant_id, '6603', '退款支出', 'expense', 'debit', 'active'
+SELECT id || '-acct-refund', id, '6603', '退款支出', 'expense', 'debit', 'active'
 FROM tenants
 ON CONFLICT (tenant_id, code) DO NOTHING;
 
 INSERT INTO financial_accounts (id, tenant_id, code, name, type, normal_balance, status)
-SELECT tenant_id || '-acct-payroll-expense', tenant_id, '6401', '教师课酬', 'expense', 'debit', 'active'
+SELECT id || '-acct-payroll-expense', id, '6401', '教师课酬', 'expense', 'debit', 'active'
 FROM tenants
 ON CONFLICT (tenant_id, code) DO NOTHING;
 
 INSERT INTO financial_accounts (id, tenant_id, code, name, type, normal_balance, status)
-SELECT tenant_id || '-acct-payroll-payable', tenant_id, '2202', '应付课酬', 'liability', 'credit', 'active'
+SELECT id || '-acct-payroll-payable', id, '2202', '应付课酬', 'liability', 'credit', 'active'
 FROM tenants
 ON CONFLICT (tenant_id, code) DO NOTHING;
 

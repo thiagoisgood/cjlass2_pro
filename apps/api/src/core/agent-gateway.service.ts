@@ -286,6 +286,7 @@ export class AgentGatewayService implements OnModuleInit {
     const endpoint = `${this.hermesUrl.replace(/\/$/, "")}/v1/chat/completions`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Number(process.env.HERMES_TIMEOUT_MS ?? 8000));
+    const hermesModel = process.env.HERMES_MODEL?.trim();
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -295,7 +296,7 @@ export class AgentGatewayService implements OnModuleInit {
           ...(process.env.HERMES_AGENT_API_KEY ? { authorization: `Bearer ${process.env.HERMES_AGENT_API_KEY}` } : {}),
         },
         body: JSON.stringify({
-          model: process.env.HERMES_MODEL || "hermes",
+          ...(hermesModel ? { model: hermesModel } : {}),
           temperature: 0,
           messages: [
             {

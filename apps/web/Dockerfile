@@ -20,4 +20,4 @@ RUN npm ci --omit=dev --audit=false --fund=false
 COPY --from=build /app/packages/shared/dist packages/shared/dist
 COPY --from=build /app/apps/web/dist apps/web/dist
 EXPOSE 5173
-CMD ["npm", "run", "preview", "-w", "@cjlass2/web", "--", "--host", "0.0.0.0"]
+CMD ["npm", "run", "preview", "-w", "@cjlass2/web", "--", "--host", "0.0.0.0", "--port", "5173"]

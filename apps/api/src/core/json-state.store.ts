@@ -42,7 +42,7 @@ import { type UserRole } from "./request-context.js";
 
 const { Pool } = pg;
 export const POSTGRES_SCHEMA_VERSION = 6;
-export const POSTGRES_SCHEMA_CHECKSUM = "12790449de2bc6b7cab90dbc2eaa2d98c3f38ecd55b4195804d8fae45f2c7fc9";
+export const POSTGRES_SCHEMA_CHECKSUM = "d29c29ad13cb133d972161896cdfc604c558220c7d8a92b857016e64d771a288";
 
 export interface StoreUser {
   userId: string;
