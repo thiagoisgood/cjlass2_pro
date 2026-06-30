@@ -1,0 +1,18 @@
+{$PUBLIC_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	reverse_proxy /api/* api:3001
+	reverse_proxy web:5173 {
+		header_up Host 127.0.0.1:5173
+	}
+}
+
+http://{$PUBLIC_IP} {
+	redir https://{$PUBLIC_DOMAIN}{uri} permanent
+}
