@@ -264,14 +264,16 @@ API_AUTH_TOKEN=your-api-token
 AUTH_SESSION_SECRET=your-session-secret
 
 # Notification channels (optional)
-WECOM_CORP_ID=your-corp-id
-WECHAT_H5_APP_ID=your-app-id
-FEISHU_APP_ID=your-app-id
-DINGTALK_CLIENT_ID=your-client-id
+WECOM_WEBHOOK_URL=https://example.com/wecom-webhook
+WECHAT_WEBHOOK_URL=https://example.com/wechat-webhook
+FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/xxx
+FEISHU_WEBHOOK_SECRET=your-sign-secret
+DINGTALK_WEBHOOK_URL=https://example.com/dingtalk-webhook
+NOTIFICATION_WEBHOOK_URL=https://example.com/generic-webhook
 
 # Agent
 HERMES_AGENT_URL=http://localhost:8080  # Optional
-NOTIFICATION_PROVIDER_MODE=mock  # For testing
+NOTIFICATION_PROVIDER_MODE=mock  # For testing only
 ```
 
 ## Development Workflow

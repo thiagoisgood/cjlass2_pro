@@ -6,6 +6,7 @@ import { AgentGatewayService } from "../src/core/agent-gateway.service.js";
 import { AuthService } from "../src/core/auth.service.js";
 import { CoreService } from "../src/core/core.service.js";
 import { JsonStateStore } from "../src/core/json-state.store.js";
+import { NotificationProviderService } from "../src/core/notification-provider.service.js";
 import { NotificationQueueService } from "../src/core/notification-queue.service.js";
 import { assertScope, defaultRequestContext, requestContextFromHeaders, scopesForRole } from "../src/core/request-context.js";
 
@@ -284,9 +285,11 @@ test("business task confirmation checks expected version", async () => {
 });
 
 test("notification delivery records failed external sends and retry state", async () => {
-  const previousWechat = process.env.WECHAT_H5_APP_ID;
+  const previousWechat = process.env.WECHAT_WEBHOOK_URL;
+  const previousGenericWebhook = process.env.NOTIFICATION_WEBHOOK_URL;
   const previousRedis = process.env.REDIS_URL;
-  delete process.env.WECHAT_H5_APP_ID;
+  delete process.env.WECHAT_WEBHOOK_URL;
+  delete process.env.NOTIFICATION_WEBHOOK_URL;
   delete process.env.REDIS_URL;
   try {
     const queue = new NotificationQueueService();
@@ -305,11 +308,8 @@ test("notification delivery records failed external sends and retry state", asyn
     assert.equal(queue.getMemoryJobs()[0].action, "retry");
     assert.equal(queue.getMemoryJobs()[0].deliveryId, sent.notificationDeliveries[0].id);
   } finally {
-    if (previousWechat == null) {
-      delete process.env.WECHAT_H5_APP_ID;
-    } else {
-      process.env.WECHAT_H5_APP_ID = previousWechat;
-    }
+    restoreEnv("WECHAT_WEBHOOK_URL", previousWechat);
+    restoreEnv("NOTIFICATION_WEBHOOK_URL", previousGenericWebhook);
     if (previousRedis == null) {
       delete process.env.REDIS_URL;
     } else {
@@ -319,9 +319,9 @@ test("notification delivery records failed external sends and retry state", asyn
 });
 
 test("configured external notification channels enqueue async delivery jobs", async () => {
-  const previousWechat = process.env.WECHAT_H5_APP_ID;
+  const previousWechat = process.env.WECHAT_WEBHOOK_URL;
   const previousRedis = process.env.REDIS_URL;
-  process.env.WECHAT_H5_APP_ID = "wechat-app-for-test";
+  process.env.WECHAT_WEBHOOK_URL = "https://example.test/wechat-webhook";
   delete process.env.REDIS_URL;
   try {
     const queue = new NotificationQueueService();
@@ -335,16 +335,41 @@ test("configured external notification channels enqueue async delivery jobs", as
     assert.equal(queue.getMemoryJobs()[0].action, "send");
     assert.equal(queue.getMemoryJobs()[0].notificationId, "note-1");
   } finally {
-    if (previousWechat == null) {
-      delete process.env.WECHAT_H5_APP_ID;
-    } else {
-      process.env.WECHAT_H5_APP_ID = previousWechat;
-    }
+    restoreEnv("WECHAT_WEBHOOK_URL", previousWechat);
     if (previousRedis == null) {
       delete process.env.REDIS_URL;
     } else {
       process.env.REDIS_URL = previousRedis;
     }
+  }
+});
+
+test("feishu notification channel uses webhook configuration for queued delivery", async () => {
+  const previousFeishuWebhook = process.env.FEISHU_WEBHOOK_URL;
+  const previousGenericWebhook = process.env.NOTIFICATION_WEBHOOK_URL;
+  const previousRedis = process.env.REDIS_URL;
+  process.env.FEISHU_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/test";
+  delete process.env.NOTIFICATION_WEBHOOK_URL;
+  delete process.env.REDIS_URL;
+  try {
+    const queue = new NotificationQueueService();
+    const service = new CoreService(new JsonStateStore(), queue);
+    const created = await service.createNotification({
+      title: "飞书通知",
+      channel: "飞书",
+      recipient: "教务群",
+      status: "待发送",
+      content: "这是一条测试通知。",
+    });
+    const sent = await service.sendNotification(created.notifications[0].id);
+
+    assert.equal(sent.notifications[0].status, "待发送");
+    assert.equal(sent.notificationDeliveries[0].status, "queued");
+    assert.equal(queue.getMemoryJobs()[0].notificationId, created.notifications[0].id);
+  } finally {
+    restoreEnv("FEISHU_WEBHOOK_URL", previousFeishuWebhook);
+    restoreEnv("NOTIFICATION_WEBHOOK_URL", previousGenericWebhook);
+    restoreEnv("REDIS_URL", previousRedis);
   }
 });
 
@@ -372,10 +397,10 @@ test("notification queue reports memory fallback when redis is not configured", 
 });
 
 test("notification worker sends queued jobs through the controlled provider", async () => {
-  const previousWechat = process.env.WECHAT_H5_APP_ID;
+  const previousWechat = process.env.WECHAT_WEBHOOK_URL;
   const previousRedis = process.env.REDIS_URL;
   const previousProviderMode = process.env.NOTIFICATION_PROVIDER_MODE;
-  process.env.WECHAT_H5_APP_ID = "wechat-app-for-test";
+  process.env.WECHAT_WEBHOOK_URL = "https://example.test/wechat-webhook";
   process.env.NOTIFICATION_PROVIDER_MODE = "mock";
   delete process.env.REDIS_URL;
   try {
@@ -392,17 +417,17 @@ test("notification worker sends queued jobs through the controlled provider", as
     assert.equal(snapshot.notifications.find((item) => item.id === "note-1")?.status, "已发送");
     assert.equal(service.notificationQueueStatus().memoryDepth, 0);
   } finally {
-    restoreEnv("WECHAT_H5_APP_ID", previousWechat);
+    restoreEnv("WECHAT_WEBHOOK_URL", previousWechat);
     restoreEnv("REDIS_URL", previousRedis);
     restoreEnv("NOTIFICATION_PROVIDER_MODE", previousProviderMode);
   }
 });
 
 test("notification worker claims due jobs from redis streams", async () => {
-  const previousWechat = process.env.WECHAT_H5_APP_ID;
+  const previousWechat = process.env.WECHAT_WEBHOOK_URL;
   const previousRedis = process.env.REDIS_URL;
   const previousProviderMode = process.env.NOTIFICATION_PROVIDER_MODE;
-  process.env.WECHAT_H5_APP_ID = "wechat-app-for-test";
+  process.env.WECHAT_WEBHOOK_URL = "https://example.test/wechat-webhook";
   process.env.REDIS_URL = "redis://fake-local-test";
   process.env.NOTIFICATION_PROVIDER_MODE = "mock";
   try {
@@ -446,17 +471,17 @@ test("notification worker claims due jobs from redis streams", async () => {
     assert.equal(snapshot.notificationDeliveries[0].status, "sent");
     assert.match(snapshot.notificationDeliveries[0].providerMessageId ?? "", /^mock-/);
   } finally {
-    restoreEnv("WECHAT_H5_APP_ID", previousWechat);
+    restoreEnv("WECHAT_WEBHOOK_URL", previousWechat);
     restoreEnv("REDIS_URL", previousRedis);
     restoreEnv("NOTIFICATION_PROVIDER_MODE", previousProviderMode);
   }
 });
 
 test("notification worker requeues provider failures for retry", async () => {
-  const previousWechat = process.env.WECHAT_H5_APP_ID;
+  const previousWechat = process.env.WECHAT_WEBHOOK_URL;
   const previousRedis = process.env.REDIS_URL;
   const previousProviderMode = process.env.NOTIFICATION_PROVIDER_MODE;
-  process.env.WECHAT_H5_APP_ID = "wechat-app-for-test";
+  process.env.WECHAT_WEBHOOK_URL = "http://127.0.0.1:9/webhook";
   delete process.env.NOTIFICATION_PROVIDER_MODE;
   delete process.env.REDIS_URL;
   try {
@@ -468,12 +493,85 @@ test("notification worker requeues provider failures for retry", async () => {
     assert.deepEqual(result, { processed: 1, sent: 0, failed: 0, retried: 1 });
     const snapshot = await service.snapshot();
     assert.equal(snapshot.notificationDeliveries[0].status, "retry");
-    assert.match(snapshot.notificationDeliveries[0].errorMessage ?? "", /webhook/);
+    assert.match(snapshot.notificationDeliveries[0].errorMessage ?? "", /fetch|failed|ECONNREFUSED|webhook/i);
     assert.equal(service.notificationQueueStatus().memoryDepth, 1);
   } finally {
-    restoreEnv("WECHAT_H5_APP_ID", previousWechat);
+    restoreEnv("WECHAT_WEBHOOK_URL", previousWechat);
     restoreEnv("REDIS_URL", previousRedis);
     restoreEnv("NOTIFICATION_PROVIDER_MODE", previousProviderMode);
+  }
+});
+
+test("feishu notification provider posts custom bot text payload", async () => {
+  const previousProviderMode = process.env.NOTIFICATION_PROVIDER_MODE;
+  const previousFeishuWebhook = process.env.FEISHU_WEBHOOK_URL;
+  const previousFeishuSecret = process.env.FEISHU_WEBHOOK_SECRET;
+  const previousFetch = globalThis.fetch;
+  const previousDateNow = Date.now;
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  process.env.FEISHU_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/test";
+  process.env.FEISHU_WEBHOOK_SECRET = "sign-secret";
+  delete process.env.NOTIFICATION_PROVIDER_MODE;
+  Date.now = () => 1_710_000_000_000;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requests.push({ url: String(url), init });
+    return new Response(JSON.stringify({ code: 0, msg: "success", data: { message_id: "feishu-message-1" } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    const provider = new NotificationProviderService();
+    const result = await provider.send({
+      channel: "飞书",
+      recipient: "教务群",
+      title: "调课通知",
+      content: "张同学课程调整到 10:30。",
+      deliveryId: "delivery-test",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.providerMessageId, "feishu-message-1");
+    assert.equal(requests[0].url, process.env.FEISHU_WEBHOOK_URL);
+    const body = JSON.parse(String(requests[0].init?.body)) as Record<string, unknown>;
+    const content = body.content as { text?: string };
+    assert.equal(body.msg_type, "text");
+    assert.match(content.text ?? "", /调课通知/);
+    assert.match(content.text ?? "", /张同学课程调整到 10:30/);
+    assert.equal(body.timestamp, "1710000000");
+    assert.equal(body.sign, createHmac("sha256", "1710000000\nsign-secret").update("").digest("base64"));
+    assert.equal(Object.hasOwn(body, "recipient"), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    Date.now = previousDateNow;
+    restoreEnv("NOTIFICATION_PROVIDER_MODE", previousProviderMode);
+    restoreEnv("FEISHU_WEBHOOK_URL", previousFeishuWebhook);
+    restoreEnv("FEISHU_WEBHOOK_SECRET", previousFeishuSecret);
+  }
+});
+
+test("feishu notification provider reports nonzero provider response code", async () => {
+  const previousProviderMode = process.env.NOTIFICATION_PROVIDER_MODE;
+  const previousFeishuWebhook = process.env.FEISHU_WEBHOOK_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.FEISHU_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/test";
+  delete process.env.NOTIFICATION_PROVIDER_MODE;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ code: 19021, msg: "sign invalid" }), { status: 200 })) as typeof fetch;
+  try {
+    const result = await new NotificationProviderService().send({
+      channel: "飞书",
+      recipient: "教务群",
+      title: "调课通知",
+      content: "测试",
+      deliveryId: "delivery-test",
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.errorMessage ?? "", /19021 sign invalid/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restoreEnv("NOTIFICATION_PROVIDER_MODE", previousProviderMode);
+    restoreEnv("FEISHU_WEBHOOK_URL", previousFeishuWebhook);
   }
 });
 

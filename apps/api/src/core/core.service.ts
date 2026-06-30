@@ -31,7 +31,7 @@ import {
 import { cosineSimilarity, EmbeddingProvider, hashContent } from "./embedding-provider.js";
 import { hashPassword } from "./auth-credentials.js";
 import { JsonStateStore } from "./json-state.store.js";
-import { NotificationProviderService } from "./notification-provider.service.js";
+import { isNotificationChannelConfigured, NotificationProviderService } from "./notification-provider.service.js";
 import { NotificationQueueService, type NotificationQueueJob } from "./notification-queue.service.js";
 import { defaultRequestContext, type RequestContext } from "./request-context.js";
 
@@ -2978,16 +2978,16 @@ function notificationChannelState(channel: string): { connected: boolean; name: 
     return { connected: true, name: "站内通知", kind: "internal" };
   }
   if (/企业微信|企微/.test(channel)) {
-    return { connected: Boolean(process.env.WECOM_CORP_ID), name: "企业微信", kind: "external" };
+    return { connected: isNotificationChannelConfigured(channel), name: "企业微信", kind: "external" };
   }
   if (/微信/.test(channel)) {
-    return { connected: Boolean(process.env.WECHAT_H5_APP_ID || process.env.WECHAT_APP_ID), name: "微信", kind: "external" };
+    return { connected: isNotificationChannelConfigured(channel), name: "微信", kind: "external" };
   }
   if (/飞书/.test(channel)) {
-    return { connected: Boolean(process.env.FEISHU_APP_ID), name: "飞书", kind: "external" };
+    return { connected: isNotificationChannelConfigured(channel), name: "飞书", kind: "external" };
   }
   if (/钉钉/.test(channel)) {
-    return { connected: Boolean(process.env.DINGTALK_CLIENT_ID), name: "钉钉", kind: "external" };
+    return { connected: isNotificationChannelConfigured(channel), name: "钉钉", kind: "external" };
   }
   return { connected: false, name: channel || "未知渠道", kind: "external" };
 }

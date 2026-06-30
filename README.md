@@ -325,17 +325,19 @@ EMBEDDING_API_KEY=your-key             # 未配置时使用本地确定性向量
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIMENSION=1536
 
-# 通知渠道（可选）
-WECOM_CORP_ID=your-corp-id             # 企业微信
-WECHAT_H5_APP_ID=your-app-id           # 微信 H5
-FEISHU_APP_ID=your-app-id              # 飞书
-DINGTALK_CLIENT_ID=your-client-id      # 钉钉
+# 通知渠道 webhook（可选；生产发送需要对应渠道 URL）
+WECOM_WEBHOOK_URL=https://example.com/wecom-webhook
+WECHAT_WEBHOOK_URL=https://example.com/wechat-webhook
+FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/xxx
+FEISHU_WEBHOOK_SECRET=your-sign-secret # 飞书机器人启用签名校验时填写
+DINGTALK_WEBHOOK_URL=https://example.com/dingtalk-webhook
+NOTIFICATION_WEBHOOK_URL=https://example.com/generic-webhook # 兜底通用 webhook
 
 # Agent
 HERMES_AGENT_URL=http://localhost:8080 # Hermes Agent 地址
 HERMES_AGENT_API_KEY=your-key          # Hermes/OpenAI-compatible API Key
 HERMES_MODEL=hermes                    # 可选；未设置时使用 Hermes 环境默认模型
-NOTIFICATION_PROVIDER_MODE=mock        # 测试模式
+NOTIFICATION_PROVIDER_MODE=mock        # 仅测试模式；生产不要设置为 mock
 ```
 
 ## 数据库迁移
