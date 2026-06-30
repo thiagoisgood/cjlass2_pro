@@ -106,6 +106,35 @@ services:
     cpus: "0.35"
     pids_limit: 128
 
+  webhook:
+    build:
+      context: ./infra/webhook
+    restart: unless-stopped
+    environment:
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      NOTIFICATION_PROVIDER: ${NOTIFICATION_PROVIDER:-}
+      NOTIFICATION_WEBHOOK_URL: ${NOTIFICATION_WEBHOOK_URL:-}
+      PROJECT_DIR: /project
+      LOG_DIR: /project/logs/deploy
+      DEPLOY_BRANCH: ${DEPLOY_BRANCH:-main}
+    ports:
+      - "${WEBHOOK_PORT:-9000}:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - .:/project:rw
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9000/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: "0.25"
+    pids_limit: 64
+
 volumes:
   postgres-data:
 
