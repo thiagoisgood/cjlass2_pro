@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { TENANT_ID } from "@cjlass2/shared";
+import { TENANT_ID, type AuditLog } from "@cjlass2/shared";
 import { normalizeEmail, verifyPassword } from "./auth-credentials.js";
 import { JsonStateStore } from "./json-state.store.js";
 import { scopesForRole, signSessionToken, verifySessionToken, type UserRole } from "./request-context.js";
@@ -34,11 +34,13 @@ export class AuthService {
     const email = normalizeEmail(input.email);
     const password = input.password ?? "";
     if (!email || !password) {
+      await this.auditLogin(email || "unknown", false, "缺少邮箱或密码");
       throw new UnauthorizedException("Email and password are required");
     }
 
     const user = await this.store.findUserByEmail(TENANT_ID, email);
     if (!user || !verifyPassword(password, user.passwordHash)) {
+      await this.auditLogin(email, false, "邮箱或密码错误");
       throw new UnauthorizedException("Invalid email or password");
     }
 
@@ -51,6 +53,7 @@ export class AuthService {
       role: user.role,
       exp: expiresAtSeconds,
     };
+    await this.auditLogin(email, true, `用户 ${user.displayName} 登录成功`, user.displayName);
     return {
       token: signSessionToken(payload),
       expiresAt: new Date(expiresAtSeconds * 1000).toISOString(),
@@ -66,6 +69,22 @@ export class AuthService {
     }
     return toSessionUser(user);
   }
+
+  private async auditLogin(email: string, success: boolean, summary: string, actor?: string) {
+    const previous = await this.store.load();
+    const log: AuditLog = {
+      id: `audit-login-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      time: nowText(),
+      actor: actor || email,
+      action: success ? "登录成功" : "登录失败",
+      summary,
+      status: success ? "已完成" : "已拒绝",
+    };
+    await this.store.saveIncremental(previous, {
+      ...previous,
+      auditLogs: [log, ...previous.auditLogs],
+    });
+  }
 }
 
 function toSessionUser(user: Awaited<ReturnType<JsonStateStore["findUserByEmail"]>> & NonNullable<unknown>): SessionUser {
@@ -77,4 +96,8 @@ function toSessionUser(user: Awaited<ReturnType<JsonStateStore["findUserByEmail"
     role: user.role,
     scopes: scopesForRole(user.role),
   };
+}
+
+function nowText(): string {
+  return new Date().toISOString().replace("T", " ").slice(0, 16);
 }

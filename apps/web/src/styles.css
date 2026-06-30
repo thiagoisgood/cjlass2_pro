@@ -1201,8 +1201,8 @@ button:disabled {
   grid-template-columns: 350px minmax(0, 1fr);
   grid-template-areas:
     "pending orders"
-    "pending draft"
-    "pending trend";
+    "pending finance"
+    "payroll ledger";
   gap: 18px;
 }
 
@@ -1214,6 +1214,52 @@ button:disabled {
 
 .orders-panel {
   grid-area: orders;
+}
+
+.finance-panel {
+  grid-area: finance;
+}
+
+.payroll-panel {
+  grid-area: payroll;
+}
+
+.ledger-panel {
+  grid-area: ledger;
+}
+
+.finance-control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.finance-control-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px;
+  min-width: 0;
+}
+
+.finance-control-grid small,
+.finance-control-grid p {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+}
+
+.finance-control-grid strong {
+  display: block;
+  margin: 4px 0;
+  font-size: 0.95rem;
+}
+
+.finance-control-grid p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pending-list {
@@ -1245,6 +1291,45 @@ button:disabled {
   justify-content: end;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.danger-link {
+  color: var(--red);
+}
+
+.finance-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mini-ledger-list {
+  display: grid;
+  gap: 10px;
+}
+
+.finance-row {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 12px minmax(92px, auto) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.finance-row small {
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .table-search,
@@ -1717,6 +1802,7 @@ button:disabled {
 }
 
 .chat-phone {
+  grid-row: span 2;
   min-height: 588px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1821,7 +1907,12 @@ button:disabled {
 }
 
 .task-panel {
+  grid-column: 2;
   min-height: 588px;
+}
+
+.chat-layout > .task-panel + .task-panel {
+  min-height: 260px;
 }
 
 .task-selector {
@@ -2240,6 +2331,10 @@ button:disabled {
     grid-template-areas: none;
   }
 
+  .finance-control-grid {
+    grid-template-columns: 1fr;
+  }
+
   .pending-panel,
   .orders-panel {
     grid-area: auto;
@@ -2355,9 +2450,9 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .editor-fields,
-  .form-grid,
-  .chat-layout,
+	  .editor-fields,
+	  .form-grid,
+	  .chat-layout,
   .donut-layout,
   .progress-row,
   .insight-row {
@@ -2374,7 +2469,13 @@ button:disabled {
     grid-template-columns: 22px minmax(0, 1fr);
   }
 
-  .command-result button {
-    grid-column: 2;
-  }
-}
+	  .command-result button {
+	    grid-column: 2;
+	  }
+
+	  .chat-phone,
+	  .task-panel {
+	    grid-column: auto;
+	    grid-row: auto;
+	  }
+	}

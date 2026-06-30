@@ -281,7 +281,16 @@ CREATE TABLE IF NOT EXISTS knowledge_docs (
   scope TEXT NOT NULL,
   status TEXT NOT NULL,
   updated_at_text TEXT NOT NULL,
-  source_count INTEGER NOT NULL DEFAULT 0
+  source_count INTEGER NOT NULL DEFAULT 0,
+  source_uri TEXT NOT NULL DEFAULT '',
+  mime_type TEXT NOT NULL DEFAULT 'text/plain',
+  checksum TEXT NOT NULL DEFAULT '',
+  parser TEXT NOT NULL DEFAULT '',
+  effective_from TEXT NOT NULL DEFAULT '',
+  expires_at TEXT NOT NULL DEFAULT '',
+  invalidated_at TIMESTAMPTZ,
+  invalidated_by TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE TABLE IF NOT EXISTS knowledge_chunks (
@@ -290,7 +299,12 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   doc_id TEXT NOT NULL REFERENCES knowledge_docs(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
+  content_hash TEXT NOT NULL DEFAULT '',
   embedding vector(1536),
+  embedding_provider TEXT,
+  embedding_model TEXT,
+  embedding_dimension INTEGER,
+  embedded_at TIMESTAMPTZ,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -331,6 +345,9 @@ CREATE INDEX IF NOT EXISTS notification_tenant_status_idx ON notification_drafts
 CREATE INDEX IF NOT EXISTS business_tasks_tenant_status_idx ON business_tasks(tenant_id, status);
 CREATE INDEX IF NOT EXISTS audit_logs_tenant_time_idx ON audit_logs(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS knowledge_chunks_tenant_doc_idx ON knowledge_chunks(tenant_id, doc_id);
+CREATE INDEX IF NOT EXISTS knowledge_docs_validity_idx ON knowledge_docs(tenant_id, status, scope, effective_from, expires_at) WHERE invalidated_at IS NULL;
+CREATE INDEX IF NOT EXISTS knowledge_chunks_content_hash_idx ON knowledge_chunks(tenant_id, doc_id, content_hash);
+CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_ivfflat_idx ON knowledge_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100) WHERE embedding IS NOT NULL;
 
 ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tenants FORCE ROW LEVEL SECURITY;

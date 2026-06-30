@@ -112,6 +112,106 @@ export interface PaymentLedgerEntry {
   reversesEntryId?: string;
 }
 
+export interface Invoice {
+  id: string;
+  orderId: string;
+  invoiceNo: string;
+  amount: number;
+  status: "draft" | "issued" | "void";
+  issuedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Refund {
+  id: string;
+  orderId: string;
+  paymentLedgerEntryId?: string;
+  amount: number;
+  reason: string;
+  status: "requested" | "approved" | "settled" | "rejected";
+  requestedBy: string;
+  approvedBy?: string;
+  exceptional?: boolean;
+  exceptionCode?: string;
+  exceptionNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinancialLedgerEntry {
+  id: string;
+  sourceType: "invoice" | "payment" | "refund" | "payroll_confirm" | "payroll_settle" | "adjustment";
+  sourceId: string;
+  studentId?: string;
+  account: string;
+  direction: "debit" | "credit";
+  amount: number;
+  occurredAt: string;
+  createdAt: string;
+}
+
+export interface FinancialAccount {
+  id: string;
+  code: string;
+  name: string;
+  type: "asset" | "liability" | "income" | "expense" | "equity";
+  normalBalance: "debit" | "credit";
+  status: "active" | "inactive";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountingPeriodLock {
+  id: string;
+  period: string;
+  status: "locked";
+  lockedAt: string;
+  lockedBy: string;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReconciliationRun {
+  id: string;
+  period: string;
+  status: "balanced" | "out_of_balance";
+  debitTotal: number;
+  creditTotal: number;
+  difference: number;
+  checkedAt: string;
+  checkedBy: string;
+  notes: string[];
+}
+
+export interface PayrollRule {
+  id: string;
+  teacherId?: string;
+  teacherName: string;
+  courseId?: string;
+  courseName?: string;
+  ruleType: "fixed_per_lesson" | "percent_of_lesson_price";
+  amount: number;
+  status: "active" | "inactive";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PayrollRecord {
+  id: string;
+  teacherId?: string;
+  teacherName: string;
+  lessonId?: string;
+  ruleId?: string;
+  amount: number;
+  status: "pending" | "confirmed" | "settled";
+  confirmedAt?: string;
+  settledAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface NotificationDraft {
   id: string;
   type: string;
@@ -147,7 +247,7 @@ export interface BusinessTaskCheck {
 
 export interface BusinessTask {
   id: string;
-  type: "reschedule" | "payment" | "attendance" | "notification";
+  type: "reschedule" | "payment" | "attendance" | "notification" | "refund" | "payroll";
   title: string;
   status: "等待确认" | "处理中" | "执行成功" | "执行失败" | "已取消" | "已撤销";
   channel: string;
@@ -193,6 +293,15 @@ export interface KnowledgeDoc {
   status: string;
   updatedAt: string;
   sourceCount: number;
+  sourceUri?: string;
+  mimeType?: string;
+  checksum?: string;
+  parser?: string;
+  effectiveFrom?: string;
+  expiresAt?: string;
+  invalidatedAt?: string;
+  invalidatedBy?: string;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface KnowledgeChunk {
@@ -204,6 +313,12 @@ export interface KnowledgeChunk {
   content: string;
   sourceLabel: string;
   metadata: Record<string, string | number | boolean>;
+  contentHash?: string;
+  embedding?: number[];
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  embeddingDimension?: number;
+  embeddedAt?: string;
 }
 
 export interface ChannelIntegration {
@@ -284,6 +399,14 @@ export interface AppSnapshot {
   orders: Order[];
   lessonLedgerEntries: LessonLedgerEntry[];
   paymentLedgerEntries: PaymentLedgerEntry[];
+  invoices: Invoice[];
+  refunds: Refund[];
+  financialLedgerEntries: FinancialLedgerEntry[];
+  financialAccounts: FinancialAccount[];
+  accountingPeriodLocks: AccountingPeriodLock[];
+  reconciliationRuns: ReconciliationRun[];
+  payrollRules: PayrollRule[];
+  payrollRecords: PayrollRecord[];
   notifications: NotificationDraft[];
   notificationDeliveries: NotificationDelivery[];
   tasks: BusinessTask[];
@@ -470,6 +593,36 @@ export function createSeedState(): AppSnapshot {
       { id: "ple-seed-1", orderId: "order-1", studentId: "stu-zhang", studentName: "张同学", entryType: "payment", amountDelta: 3120, channel: "微信支付", reason: "历史收款导入", actorId: "system", occurredAt: "2024-04-15 09:30" },
       { id: "ple-seed-2", orderId: "order-2", studentId: "stu-li", studentName: "李同学", entryType: "payment", amountDelta: 1740, channel: "银行转账", reason: "历史收款导入", actorId: "system", occurredAt: "2024-04-21 14:20" },
       { id: "ple-seed-3", orderId: "order-3", studentId: "stu-wang", studentName: "王艺森", entryType: "payment", amountDelta: 1920, channel: "微信支付", reason: "历史收款导入", actorId: "system", occurredAt: "2024-04-07 18:00" },
+    ],
+    invoices: [
+      { id: "invoice-seed-1", orderId: "order-3", invoiceNo: "FP20240407009", amount: 1920, status: "issued", issuedAt: "2024-04-07 18:05", createdAt: "2024-04-07 18:00", updatedAt: "2024-04-07 18:05" },
+      { id: "invoice-seed-2", orderId: "order-1", invoiceNo: "FP20240415001", amount: 4800, status: "draft", createdAt: "2024-04-15 09:30", updatedAt: "2024-04-15 09:30" },
+    ],
+    refunds: [
+      { id: "refund-seed-1", orderId: "order-1", paymentLedgerEntryId: "ple-seed-1", amount: 300, reason: "家长申请调整课包尾款", status: "requested", requestedBy: "user-lin", createdAt: "2024-04-20 10:00", updatedAt: "2024-04-20 10:00" },
+    ],
+    financialLedgerEntries: [
+      { id: "fin-seed-1d", sourceType: "invoice", sourceId: "invoice-seed-1", studentId: "stu-wang", account: "应收账款", direction: "debit", amount: 1920, occurredAt: "2024-04-07 18:05", createdAt: "2024-04-07 18:05" },
+      { id: "fin-seed-1c", sourceType: "invoice", sourceId: "invoice-seed-1", studentId: "stu-wang", account: "课程收入", direction: "credit", amount: 1920, occurredAt: "2024-04-07 18:05", createdAt: "2024-04-07 18:05" },
+      { id: "fin-seed-2d", sourceType: "payment", sourceId: "ple-seed-3", studentId: "stu-wang", account: "银行存款", direction: "debit", amount: 1920, occurredAt: "2024-04-07 18:00", createdAt: "2024-04-07 18:00" },
+      { id: "fin-seed-2c", sourceType: "payment", sourceId: "ple-seed-3", studentId: "stu-wang", account: "应收账款", direction: "credit", amount: 1920, occurredAt: "2024-04-07 18:00", createdAt: "2024-04-07 18:00" },
+    ],
+    financialAccounts: [
+      { id: "acct-bank", code: "1002", name: "银行存款", type: "asset", normalBalance: "debit", status: "active", createdAt: "2024-04-01 09:00", updatedAt: "2024-04-01 09:00" },
+      { id: "acct-receivable", code: "1122", name: "应收账款", type: "asset", normalBalance: "debit", status: "active", createdAt: "2024-04-01 09:00", updatedAt: "2024-04-01 09:00" },
+      { id: "acct-income", code: "6001", name: "课程收入", type: "income", normalBalance: "credit", status: "active", createdAt: "2024-04-01 09:00", updatedAt: "2024-04-01 09:00" },
+      { id: "acct-refund", code: "6603", name: "退款支出", type: "expense", normalBalance: "debit", status: "active", createdAt: "2024-04-01 09:00", updatedAt: "2024-04-01 09:00" },
+      { id: "acct-payroll-expense", code: "6401", name: "教师课酬", type: "expense", normalBalance: "debit", status: "active", createdAt: "2024-04-01 09:00", updatedAt: "2024-04-01 09:00" },
+      { id: "acct-payroll-payable", code: "2202", name: "应付课酬", type: "liability", normalBalance: "credit", status: "active", createdAt: "2024-04-01 09:00", updatedAt: "2024-04-01 09:00" },
+    ],
+    accountingPeriodLocks: [],
+    reconciliationRuns: [],
+    payrollRules: [
+      { id: "payroll-rule-wang", teacherId: "teacher-wang-lao-shi", teacherName: "王老师", ruleType: "fixed_per_lesson", amount: 120, status: "active", createdAt: "2024-04-01 09:00", updatedAt: "2024-04-01 09:00" },
+      { id: "payroll-rule-lin", teacherId: "teacher-lin-lao-shi", teacherName: "林老师", ruleType: "percent_of_lesson_price", amount: 0.55, status: "active", createdAt: "2024-04-01 09:00", updatedAt: "2024-04-01 09:00" },
+    ],
+    payrollRecords: [
+      { id: "payroll-record-seed-1", teacherId: "teacher-lin-lao-shi", teacherName: "林老师", lessonId: "lesson-1", ruleId: "payroll-rule-lin", amount: 88, status: "confirmed", confirmedAt: "2024-04-28 18:30", createdAt: "2024-04-28 18:00", updatedAt: "2024-04-28 18:30" },
     ],
     notifications: [
       { id: "note-1", type: "调课通知", title: "调课通知", recipient: "张同学家长", channel: "微信", status: "待发送", content: "张先生您好，张子涵同学原定 05/08（周三）09:00 的英语一对一课程，因老师时间调整，建议改为 05/08（周三）10:30-11:30，教室不变。请您确认是否方便，如需其他时间也可以回复。", createdAt: "04-28 15:30" },

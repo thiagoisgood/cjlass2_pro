@@ -126,10 +126,10 @@ npm run build
 # 运行所有测试
 npm run test
 
-# API 单元测试（46 个）
+# API 单元测试（49 个）
 npm run test -w @cjlass2/api
 
-# 前端 E2E 测试（7 个，需先启动 dev server）
+# 前端 E2E 测试（8 个，Playwright 会启动隔离 API/Web 服务）
 npm run dev -w @cjlass2/web
 npm run test:e2e -w @cjlass2/web
 ```
@@ -141,7 +141,7 @@ npm run test:e2e -w @cjlass2/web
 - ✅ 幂等性控制和版本冲突
 - ✅ 认证授权（Session + RBAC + RLS）
 - ✅ 通知投递状态机
-- ✅ Agent Gateway（15 个 MCP 工具 + 审批流程）
+- ✅ Agent Gateway（16 个 MCP 工具 + 持久化审批流程）
 - ✅ 周期课生成和批量排课
 - ✅ 数据库迁移和 schema 校验
 
@@ -175,7 +175,10 @@ cjlass2-pro/
 │       └── migrations/               # 数据库迁移
 │           ├── 0001_initial_core_schema.sql
 │           ├── 0002_notification_delivery_state_machine.sql
-│           └── 0003_agent_tool_calls_and_approvals.sql
+│           ├── 0003_agent_tool_calls_and_approvals.sql
+│           ├── 0004_mvp_business_objects_and_channels.sql
+│           ├── 0005_rag_vector_operations.sql
+│           └── 0006_finance_controls_and_data_scope.sql
 ├── CLAUDE.md                   # Claude Code 指南
 └── IMPLEMENTATION_COMPLETENESS_AUDIT.md  # 实现审计
 ```
@@ -220,14 +223,14 @@ await store.saveIncremental(previous, next);  // 只 upsert 变更行
 
 ### Agent Gateway (MCP 工具)
 
-15 个工具分为四类：
+16 个工具分为四类：
 
 | 类别 | 工具 | 用途 |
 |------|------|------|
-| **查询** | `student_search`, `schedule_query`, `teacher_availability` | 只读查询 |
-| **方案** | `schedule_propose`, `refund_preview` | 预览不执行 |
-| **执行** | `schedule_commit`, `attendance_mark`, `notification_send` | 写操作 |
-| **高风险** | `refund_request`, `lesson_ledger_adjust` | 需审批 |
+| **查询** | `student_search`, `student_get_profile`, `schedule_query`, `package_get_balance`, `finance_get_summary`, `knowledge_search` | 只读查询 |
+| **方案** | `schedule_propose`, `schedule_check_conflicts` | 预览不执行 |
+| **执行** | `schedule_commit`, `attendance_mark`, `notification_draft`, `notification_send`, `invoice_issue`, `payroll_generate` | 写操作 |
+| **高风险** | `refund_request`, `payroll_settle` | 生产环境需审批 |
 
 高风险操作自动触发审批流程，非生产环境下 admin 自动批准。
 
@@ -263,17 +266,41 @@ POST /lesson-ledger/:id/reverse   # 课时纠错
 POST /orders                  # 创建订单
 POST /payments                # 记录收款
 GET  /payment-ledger          # 收款流水
+POST /invoices/issue          # 开具发票并写入正式分录
+POST /refunds                 # 提交退款申请
+POST /refunds/exceptional     # 提交异常退款申请
+POST /refunds/:id/approve     # 审批退款
+POST /refunds/:id/settle      # 结算退款并追加退款流水
+GET  /financial-ledger        # 正式财务分录
+POST /financial-ledger/reconcile # 财务对账
+GET  /financial-accounts      # 财务科目
+POST /financial-accounts      # 新增或更新财务科目
+GET  /accounting-period-locks # 锁账记录
+POST /accounting-periods/:period/lock # 锁定会计期间
+GET  /reconciliation-runs     # 对账记录
+POST /payroll/generate        # 生成课酬记录
+POST /payroll-records/batch-confirm # 批量确认课酬
+POST /payroll-records/:id/confirm # 确认课酬
+POST /payroll-records/:id/settle  # 结算课酬
 
 # 通知
 POST /notifications           # 创建通知
 POST /notifications/:id/send  # 发送通知
 GET  /notification-deliveries # 投递记录
 
+# RAG 知识库
+POST /knowledge-docs          # 手工创建并索引知识文档
+POST /knowledge-docs/upload   # 上传解析文本/Markdown/CSV/JSON 并生成 embedding
+POST /knowledge-search        # pgvector/embedding 优先的相似度搜索
+POST /knowledge-docs/:id/reindex    # 重建文档向量索引
+POST /knowledge-docs/:id/invalidate # 标记制度失效，搜索默认过滤
+
 # Agent
 GET  /mcp/tools               # MCP 工具列表
 POST /mcp/execute             # 执行工具
 GET  /mcp/approvals           # 审批列表
 POST /mcp/approvals/:id/decide # 审批决策
+POST /commands/interpret      # Hermes 优先、失败降级的自然语言入口
 ```
 
 ## 环境变量
@@ -287,7 +314,16 @@ REDIS_URL=redis://localhost:6379
 
 # 认证
 API_AUTH_TOKEN=your-api-token          # API 访问令牌
+API_AUTH_TOKEN_PREVIOUS=old-token      # 轮换窗口内仍可接受的旧 API token，逗号分隔
 AUTH_SESSION_SECRET=your-secret        # Session 签名密钥
+AUTH_SESSION_PREVIOUS_SECRETS=old-secret # 轮换窗口内仍可验签的旧 session secret，逗号分隔
+
+# RAG / Embedding
+EMBEDDING_PROVIDER=openai              # local | openai | openai-compatible
+EMBEDDING_BASE_URL=https://api.openai.com/v1
+EMBEDDING_API_KEY=your-key             # 未配置时使用本地确定性向量降级
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSION=1536
 
 # 通知渠道（可选）
 WECOM_CORP_ID=your-corp-id             # 企业微信
@@ -297,6 +333,8 @@ DINGTALK_CLIENT_ID=your-client-id      # 钉钉
 
 # Agent
 HERMES_AGENT_URL=http://localhost:8080 # Hermes Agent 地址
+HERMES_AGENT_API_KEY=your-key          # Hermes/OpenAI-compatible API Key
+HERMES_MODEL=hermes                    # Hermes 模型名
 NOTIFICATION_PROVIDER_MODE=mock        # 测试模式
 ```
 
@@ -305,10 +343,13 @@ NOTIFICATION_PROVIDER_MODE=mock        # 测试模式
 迁移文件位于 `infra/postgres/migrations/`，API 启动时自动执行：
 
 ```bash
-# 当前版本：3
+# 当前版本：6
 # 0001 - 核心 schema（租户、用户、学员、课程、订单、账本等）
 # 0002 - 通知投递状态机
 # 0003 - Agent 工具调用和审批表
+# 0004 - MVP 业务对象、渠道入口、发票、退款、课酬和正式财务分录
+# 0005 - RAG 上传元数据、制度有效期/失效和 pgvector 向量索引
+# 0006 - 财务科目、锁账、对账、异常退款和数据范围权限支撑
 ```
 
 迁移使用 SHA256 校验和防止篡改。
@@ -324,6 +365,36 @@ CREATE POLICY tenant_isolation_students ON students
 ```
 
 事务上下文中自动设置 `app.tenant_id`，确保数据隔离。
+
+## 角色与数据范围
+
+API 在租户隔离之上按角色裁剪快照和列表：
+
+- `admin`：全量读写。
+- `teacher`：只看自己关联学员、课程、课时流水和本人课酬；不可读取财务分录、订单、收款、发票和退款。
+- `finance`：可处理订单、收款、发票、退款、科目、锁账、对账和课酬；学生档案只保留计费必要字段，隐藏学习记录正文。
+- `assistant`：可处理学员、排课、通知等教务运营数据；财务数组清空。
+- `readonly`：只读运营视图，隐藏学生敏感记录和财务明细。
+
+知识库搜索会在 pgvector 结果返回后再次按角色过滤：学生知识只对管理员、关联教师和助教可见，财务知识只对管理员和财务可见。
+
+## 备份恢复与密钥轮换
+
+```bash
+# pg_dump 备份，可选 OBJECT_STORAGE_URI=s3://bucket/path 上传对象存储
+DATABASE_URL=postgresql://user:pass@localhost:5432/cjlass2 npm run ops:backup
+
+# 恢复到指定数据库
+BACKUP_FILE=backups/postgres/cjlass2.dump RESTORE_DATABASE_URL=postgresql://user:pass@localhost:5432/cjlass2_restore npm run ops:restore
+
+# 恢复演练，必须使用隔离 drill 数据库
+BACKUP_FILE=backups/postgres/cjlass2.dump DRILL_DATABASE_URL=postgresql://user:pass@localhost:5432/cjlass2_drill npm run ops:restore:drill
+
+# 生成 session/API token 轮换 env patch
+AUTH_SESSION_SECRET=current API_AUTH_TOKEN=current ROTATION_ENV_FILE=.secrets.rotation.env npm run ops:rotate-secrets
+```
+
+WAL 归档、对象存储保留策略和恢复演练步骤见 `docs/operations/backup-recovery.md`。
 
 ## 开发指南
 
@@ -397,8 +468,8 @@ REDIS_URL=redis://...
 
 - ✅ 后端生产化：~95%
 - ✅ 前端真实化：~90%
-- ✅ 基础设施：~80%
-- ✅ 测试覆盖：46 API + 7 Playwright
+- ✅ 基础设施：~85%
+- ✅ 测试覆盖：49 API + 8 Playwright
 
 详见 [IMPLEMENTATION_COMPLETENESS_AUDIT.md](./IMPLEMENTATION_COMPLETENESS_AUDIT.md)
 

@@ -249,11 +249,13 @@ function App() {
       () => api.interpretCommand({ text: value, source, lessonId: selectedLesson?.id, studentId: selectedStudent?.id }),
       "指令已进入受控业务流程",
     );
-    if (result?.result?.type === "proposal") {
-      setView(source === "chat" ? "chat" : "schedule");
-    } else if (result?.result?.type === "draft") {
-      setView("notifications");
-    }
+	    if (result?.result?.type === "proposal") {
+	      setView(source === "chat" ? "chat" : "schedule");
+	    } else if (result?.result?.type === "draft") {
+	      setView("notifications");
+	    } else if (/退款|课酬|发票/.test(result?.result?.title || "")) {
+	      setView("billing");
+	    }
     setCommandText("");
   }
 
@@ -766,13 +768,29 @@ function BillingPage({ snapshot, setModal, runMutation, openExport, setView }) {
   const pendingOrders = snapshot.orders.filter((order) => order.status !== "已结清");
   const totalAmount = snapshot.orders.reduce((sum, order) => sum + order.amount, 0);
   const paidAmount = snapshot.orders.reduce((sum, order) => sum + order.paid, 0);
+  const invoices = snapshot.invoices || [];
+  const refunds = snapshot.refunds || [];
+  const payrollRecords = snapshot.payrollRecords || [];
+  const financialLedgerEntries = snapshot.financialLedgerEntries || [];
+  const financialAccounts = snapshot.financialAccounts || [];
+  const accountingPeriodLocks = snapshot.accountingPeriodLocks || [];
+  const reconciliationRuns = snapshot.reconciliationRuns || [];
+  const currentPeriod = new Date().toISOString().slice(0, 7);
+  const latestReconciliation = reconciliationRuns[0];
+  const payablePayroll = payrollRecords
+    .filter((record) => record.status !== "settled")
+    .reduce((sum, record) => sum + record.amount, 0);
   return (
     <section className="content page-stack">
       <PageHeader
         title="收费管理"
-        description="收款只通过支付流水结清订单，不直接覆盖余额。"
+        description="订单、收款、发票、退款、课酬和正式分录在同一业务闭环里流转。"
         actions={[
           { label: "创建订单", icon: Plus, onClick: () => setModal("order"), primary: true },
+          { label: "生成课酬", icon: Receipt, onClick: () => runMutation(() => api.generatePayroll(), "课酬记录已生成") },
+          { label: "批量确认课酬", icon: CheckCircle2, onClick: () => runMutation(() => api.batchConfirmPayrollRecords(payrollRecords.filter((record) => record.status === "pending").map((record) => record.id)), "待确认课酬已批量确认") },
+          { label: "对账", icon: Database, onClick: () => runMutation(() => api.reconcileFinancialLedger(currentPeriod), "财务分录已完成对账") },
+          { label: "锁账", icon: ShieldCheck, onClick: () => runMutation(() => api.lockAccountingPeriod(currentPeriod, "前端发起期末锁账"), "当前会计期间已锁定") },
           { label: "生成催缴草稿", icon: BellRing, onClick: () => runMutation(() => api.generateDunningDrafts(), "催缴草稿已生成") },
           { label: "导出账单", icon: Download, onClick: () => openExport("orders") },
         ]}
@@ -780,8 +798,8 @@ function BillingPage({ snapshot, setModal, runMutation, openExport, setView }) {
       <div className="metric-grid four">
         <MetricCard icon={Receipt} tone="blue" label="订单总额" value={currency(totalAmount)} helper="数据库订单聚合" />
         <MetricCard icon={CircleDollarSign} tone="green" label="已收款" value={currency(paidAmount)} helper="支付流水聚合" />
-        <MetricCard icon={AlertTriangle} tone="red" label="待收笔数" value={pendingOrders.length} helper="未结清订单" />
-        <MetricCard icon={BellRing} tone="orange" label="催缴对象" value={pendingOrders.length} helper="可生成通知草稿" />
+        <MetricCard icon={AlertTriangle} tone="red" label="退款待处理" value={refunds.filter((refund) => refund.status !== "settled" && refund.status !== "rejected").length} helper="申请/审批/结算" />
+        <MetricCard icon={Receipt} tone="orange" label="待付课酬" value={currency(payablePayroll)} helper="待确认或待结算" />
       </div>
       <div className="billing-grid">
         <Panel title="待收款" icon={WalletCards} className="pending-panel">
@@ -794,6 +812,7 @@ function BillingPage({ snapshot, setModal, runMutation, openExport, setView }) {
                 <b>{currency(order.amount - order.paid)}</b>
                 <div className="button-row">
                   <button className="primary-button compact" type="button" onClick={() => runMutation(() => api.recordPayment(order.id), "支付流水已结清订单")}>记录收款</button>
+                  <button className="secondary-button compact" type="button" onClick={() => runMutation(() => api.issueInvoice(order.id), "发票已开具并写入分录")}>开票</button>
                   <button className="secondary-button compact" type="button" onClick={() => runMutation(() => api.createNotification({ title: `${order.student}缴费提醒`, type: "缴费提醒", recipient: `${order.student}家长`, channel: "微信", content: `您好，${order.student}的${order.name}还有待支付 ${currency(order.amount - order.paid)}，请您方便时完成支付。` }), "缴费提醒草稿已创建")}>催缴</button>
                 </div>
               </div>
@@ -814,12 +833,110 @@ function BillingPage({ snapshot, setModal, runMutation, openExport, setView }) {
                   <td>{order.name}</td>
                   <td>{currency(order.amount)}</td>
                   <td>{currency(order.paid)}</td>
-                  <td><span className={`status-pill ${order.status === "已结清" ? "tone-green" : "tone-orange"}`}>{order.status}</span></td>
+	                  <td><span className={`status-pill ${order.status === "已结清" ? "tone-green" : "tone-orange"}`}>{order.status}</span></td>
+	                  <td>
+	                    <div className="inline-actions">
+	                      <button className="link-button" type="button" onClick={() => order.status === "已结清" ? setView("reports") : runMutation(() => api.recordPayment(order.id), "订单已结清")}>
+	                        {order.status === "已结清" ? "看报表" : "收款"}
+	                      </button>
+	                      <button className="link-button" type="button" onClick={() => runMutation(() => api.issueInvoice(order.id), "发票已开具")}>开票</button>
+	                      {order.paid > 0 ? <button className="link-button danger-link" type="button" onClick={() => runMutation(() => api.requestRefund({ orderId: order.id, amount: Math.min(order.paid, 300), reason: `${order.student}${order.name}退款申请` }), "退款申请已提交")}>退款</button> : null}
+	                      {order.paid > 0 ? <button className="link-button danger-link" type="button" onClick={() => runMutation(() => api.requestExceptionalRefund({ orderId: order.id, amount: Math.min(order.paid, 300), reason: `${order.student}${order.name}异常退款申请`, exceptionCode: "manual_review", exceptionNote: "前端人工触发异常退款" }), "异常退款已提交")}>异常退款</button> : null}
+	                    </div>
+	                  </td>
+	                </tr>
+	              ))}
+	            </tbody>
+	          </table>
+	        </Panel>
+        <Panel title="发票与退款" icon={Receipt} className="finance-panel">
+          <div className="finance-split">
+            <div className="mini-ledger-list">
+              {invoices.slice(0, 5).map((invoice) => {
+                const order = snapshot.orders.find((item) => item.id === invoice.orderId);
+                return (
+                  <div className="finance-row" key={invoice.id}>
+                    <span className={`bullet-dot ${invoice.status === "issued" ? "green" : "orange"}`} />
+                    <strong>{invoice.invoiceNo}</strong>
+                    <small>{order?.student || invoice.orderId} · {currency(invoice.amount)} · {invoice.status}</small>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mini-ledger-list">
+              {refunds.slice(0, 5).map((refund) => {
+                const order = snapshot.orders.find((item) => item.id === refund.orderId);
+                return (
+                  <div className="finance-row" key={refund.id}>
+                    <span className={`bullet-dot ${refund.status === "settled" ? "green" : refund.status === "rejected" ? "red" : "orange"}`} />
+                    <strong>{currency(refund.amount)}</strong>
+                    <small>{order?.student || refund.orderId} · {refund.status}</small>
+                    <div className="inline-actions">
+                      {refund.status === "requested" ? <button className="link-button" type="button" onClick={() => runMutation(() => api.approveRefund(refund.id), "退款已审批")}>审批</button> : null}
+                      {refund.status === "approved" ? <button className="link-button" type="button" onClick={() => runMutation(() => api.settleRefund(refund.id), "退款已结算")}>结算</button> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Panel>
+        <Panel title="课酬确认与结算" icon={Users} className="payroll-panel">
+          <div className="table-toolbar">
+            <button className="field-button" type="button" onClick={() => runMutation(() => api.batchConfirmPayrollRecords(payrollRecords.filter((record) => record.status === "pending").map((record) => record.id)), "待确认课酬已批量确认")}><CheckCircle2 size={15} />批量确认</button>
+            <button className="field-button" type="button" onClick={() => openExport("payroll")}><Download size={15} />导出课酬</button>
+          </div>
+          <table className="data-table compact-table">
+            <thead><tr><th>教师</th><th>金额</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody>
+              {payrollRecords.slice(0, 8).map((record) => (
+                <tr key={record.id}>
+                  <td>{record.teacherName}</td>
+                  <td>{currency(record.amount)}</td>
+                  <td><span className={`status-pill ${record.status === "settled" ? "tone-green" : "tone-orange"}`}>{record.status}</span></td>
                   <td>
-                    <button className="link-button" type="button" onClick={() => order.status === "已结清" ? setView("reports") : runMutation(() => api.recordPayment(order.id), "订单已结清")}>
-                      {order.status === "已结清" ? "看报表" : "收款"}
-                    </button>
+                    <div className="inline-actions">
+                      {record.status === "pending" ? <button className="link-button" type="button" onClick={() => runMutation(() => api.confirmPayrollRecord(record.id), "课酬已确认")}>确认</button> : null}
+                      {record.status === "confirmed" ? <button className="link-button" type="button" onClick={() => runMutation(() => api.settlePayrollRecord(record.id), "课酬已结算")}>结算</button> : null}
+                    </div>
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
+        <Panel title="正式财务分录" icon={Database} className="ledger-panel">
+          <div className="table-toolbar">
+            <button className="field-button" type="button" onClick={() => runMutation(() => api.reconcileFinancialLedger(currentPeriod), "财务分录已完成对账")}><Database size={15} />对账</button>
+            <button className="field-button" type="button" onClick={() => runMutation(() => api.lockAccountingPeriod(currentPeriod, "前端发起期末锁账"), "当前会计期间已锁定")}><ShieldCheck size={15} />锁账</button>
+            <button className="field-button" type="button" onClick={() => openExport("financial-ledger")}><Download size={15} />导出分录</button>
+          </div>
+          <div className="finance-control-grid">
+            <div>
+              <small>财务科目</small>
+              <strong>{financialAccounts.filter((account) => account.status === "active").length} 个启用</strong>
+              <p>{financialAccounts.slice(0, 3).map((account) => account.name).join(" / ") || "暂无科目"}</p>
+            </div>
+            <div>
+              <small>锁账期间</small>
+              <strong>{accountingPeriodLocks[0]?.period || "未锁账"}</strong>
+              <p>{accountingPeriodLocks[0]?.note || "当前可继续写入分录"}</p>
+            </div>
+            <div>
+              <small>最近对账</small>
+              <strong>{latestReconciliation?.status === "balanced" ? "平衡" : latestReconciliation ? "有差异" : "未对账"}</strong>
+              <p>{latestReconciliation ? `${latestReconciliation.period} 差额 ${currency(latestReconciliation.difference)}` : "等待执行对账"}</p>
+            </div>
+          </div>
+          <table className="data-table compact-table">
+            <thead><tr><th>科目</th><th>方向</th><th>金额</th><th>来源</th></tr></thead>
+            <tbody>
+              {financialLedgerEntries.slice(0, 10).map((entry) => (
+                <tr key={entry.id}>
+                  <td>{entry.account}</td>
+                  <td>{entry.direction === "debit" ? "借" : "贷"}</td>
+                  <td>{currency(entry.amount)}</td>
+                  <td>{entry.sourceType}</td>
                 </tr>
               ))}
             </tbody>
@@ -1036,11 +1153,27 @@ function SettingsPage({ snapshot, dashboard, refreshAll, openExport, runMutation
         <Panel title="RAG 知识库" icon={BookOpen}>
           <div className="setting-list">
             {snapshot.ragDocs.map((doc) => (
-              <SettingRow key={doc.id} title={doc.title} text={`${doc.scope} · ${doc.status} · ${doc.sourceCount} 个片段`} icon={BookOpen} />
+              <div className="setting-row with-actions" key={doc.id}>
+                <span><BookOpen size={18} /></span>
+                <div>
+                  <strong>{doc.title}</strong>
+                  <p>{doc.scope} · {doc.status} · {doc.sourceCount} 个片段 · {doc.parser || "seed"}{doc.expiresAt ? ` · 有效至 ${doc.expiresAt}` : ""}</p>
+                  <div className="inline-actions">
+                    <button className="link-button" type="button" onClick={() => runMutation(() => api.reindexKnowledgeDoc(doc.id), "知识库向量索引已重建")}>重建索引</button>
+                    {doc.status === "生效中" ? <button className="link-button danger-link" type="button" onClick={() => runMutation(() => api.invalidateKnowledgeDoc(doc.id, "前台手动失效"), "知识文档已标记失效")}>标记失效</button> : null}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
-          <button className="secondary-button compact" type="button" onClick={() => runMutation(() => api.createNotification({ title: "知识库索引完成", type: "系统通知", recipient: "机构管理员", channel: "站内", content: "RAG 知识库索引任务已完成，本次仅通过服务层记录状态通知。" }), "知识库索引状态已写入通知流")}>
-            <Database size={15} />记录索引任务
+          <button className="secondary-button compact" type="button" onClick={() => runMutation(() => api.uploadKnowledgeDoc({
+            fileName: "退费与请假制度.md",
+            scope: "机构知识库",
+            mimeType: "text/markdown",
+            text: "请假需提前 24 小时提交；过期制度应标记失效。退款需保留订单、收款、退款和正式财务分录。",
+            sourceUri: "settings://sample-policy",
+          }), "知识文档已上传并生成向量索引")}>
+            <Database size={15} />上传制度样本
           </button>
         </Panel>
         <Panel title="Agent Gateway" icon={Bot}>
@@ -1151,15 +1284,17 @@ function ChatPage({
     void runCommand("chat", commandText || "帮我把今天下午 3:30 的课调到明天下午");
   }
   return (
-    <section className="content page-stack">
-      <PageHeader
-        title="聊天确认"
-        description="先预览影响，再人工确认调课、通知和缴费相关操作。"
-        actions={[
-          { label: "生成调课预览", icon: Route, onClick: () => runCommand("chat", "帮我把张子涵的英语课调到明天上午"), primary: true },
-          { label: "使用表单", icon: SquarePen, onClick: () => setModal("proposal") },
-        ]}
-      />
+	    <section className="content page-stack">
+	      <PageHeader
+	        title="聊天确认"
+	        description="自然语言先经 Agent 规划，再进入受控工具、审批、业务任务或财务流程。"
+	        actions={[
+	          { label: "生成调课预览", icon: Route, onClick: () => runCommand("chat", "帮我把张子涵的英语课调到明天上午"), primary: true },
+	          { label: "退款追问", icon: Receipt, onClick: () => runCommand("chat", "给张子涵订单退款 300 元") },
+	          { label: "课酬结算", icon: CircleDollarSign, onClick: () => runCommand("chat", "生成并确认本周课酬") },
+	          { label: "使用表单", icon: SquarePen, onClick: () => setModal("proposal") },
+	        ]}
+	      />
       <div className="chat-layout">
         <div className="chat-phone">
           <div className="chat-title">
@@ -1177,22 +1312,23 @@ function ChatPage({
               <p>{selectedTask.proposal.original} → {selectedTask.proposal.target}</p>
               <small>{selectedTask.status}</small>
             </div>
-            {commandResult ? (
-              <div className="command-result">
-                <CheckCircle2 size={20} />
-                <div>
-                  <strong>{commandResult.title}</strong>
-                  <p>{commandResult.body}</p>
-                </div>
-              </div>
-            ) : null}
+	            {commandResult ? (
+	              <div className="command-result">
+	                <CheckCircle2 size={20} />
+	                <div>
+	                  <strong>{commandResult.title}</strong>
+	                  <p>{commandResult.body}</p>
+	                  {commandResult.hermes ? <small>Agent: {commandResult.hermes} · {commandResult.agentRunId}</small> : null}
+	                </div>
+	              </div>
+	            ) : null}
           </div>
           <form className="chat-input" onSubmit={submitChat}>
             <input value={commandText} onChange={(event) => setCommandText(event.target.value)} placeholder="输入调课、催缴或点名指令" />
             <button type="submit"><Send size={16} /></button>
           </form>
         </div>
-        <Panel title="业务任务确认" icon={Route} className="task-panel">
+	        <Panel title="业务任务确认" icon={Route} className="task-panel">
           <div className="task-selector">
             {snapshot.tasks.map((task) => (
               <button key={task.id} className={task.id === selectedTaskId ? "is-active" : ""} type="button" onClick={() => setSelectedTaskId(task.id)}>
@@ -1227,10 +1363,20 @@ function ChatPage({
               </button>
             </div>
           </div>
-        </Panel>
-      </div>
-    </section>
-  );
+	        </Panel>
+	        <Panel title="Agent 审批与工具调用" icon={Bot} className="task-panel">
+	          <div className="setting-list">
+	            {(snapshot.agentApprovals || []).slice(0, 5).map((approval) => (
+	              <SettingRow key={approval.id} title={`${approval.toolName} · ${approval.status}`} text={`${approval.riskLevel} · ${approval.createdAt}`} icon={approval.status === "approved" ? CheckCircle2 : AlertTriangle} />
+	            ))}
+	            {(snapshot.agentToolCalls || []).slice(0, 5).map((call) => (
+	              <SettingRow key={call.id} title={`${call.toolName} · ${call.status}`} text={`${call.agentRunId} · ${call.durationMs || 0}ms`} icon={Database} />
+	            ))}
+	          </div>
+	        </Panel>
+	      </div>
+	    </section>
+	  );
 }
 
 function CalendarGrid({ lessons, selectedLessonId, onSelect }) {

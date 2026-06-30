@@ -7,7 +7,7 @@ import { AuthService } from "../src/core/auth.service.js";
 import { CoreService } from "../src/core/core.service.js";
 import { JsonStateStore } from "../src/core/json-state.store.js";
 import { NotificationQueueService } from "../src/core/notification-queue.service.js";
-import { assertScope, defaultRequestContext, requestContextFromHeaders } from "../src/core/request-context.js";
+import { assertScope, defaultRequestContext, requestContextFromHeaders, scopesForRole } from "../src/core/request-context.js";
 
 test("attendance deducts exactly one lesson hour and writes audit", async () => {
   const service = new CoreService(new JsonStateStore());
@@ -102,6 +102,64 @@ test("payment read model is aggregated from ledger entries", async () => {
   assert.equal(row?.outstanding, 700);
 });
 
+test("scoped snapshots filter student knowledge and finance data by role", async () => {
+  const service = new CoreService(new JsonStateStore());
+  await service.createKnowledgeDoc({
+    title: "张子涵学习记录",
+    scope: "学员知识库",
+    content: "课堂表现与家庭沟通记录",
+    metadata: { studentId: "stu-zhang" },
+  }, defaultRequestContext());
+  await service.createKnowledgeDoc({
+    title: "退款审批制度",
+    scope: "财务制度",
+    content: "退款需审批后结算。",
+  }, defaultRequestContext());
+
+  const teacherContext = {
+    ...defaultRequestContext(),
+    role: "teacher" as const,
+    actorName: "王老师",
+    scopes: scopesForRole("teacher"),
+  };
+  const teacherSnapshot = await service.scopedSnapshot(teacherContext);
+  assert.equal(teacherSnapshot.orders.length, 0);
+  assert.equal(teacherSnapshot.financialLedgerEntries.length, 0);
+  assert.equal(teacherSnapshot.students.some((student) => student.id === "stu-li"), false);
+  assert.equal(teacherSnapshot.ragDocs.some((doc) => doc.title === "张子涵学习记录"), true);
+  assert.equal(teacherSnapshot.ragDocs.some((doc) => doc.title === "退款审批制度"), false);
+
+  const financeContext = {
+    ...defaultRequestContext(),
+    role: "finance" as const,
+    actorName: "财务",
+    scopes: scopesForRole("finance"),
+  };
+  const financeSnapshot = await service.scopedSnapshot(financeContext);
+  assert.equal(financeSnapshot.orders.length > 0, true);
+  assert.equal(financeSnapshot.financialLedgerEntries.length > 0, true);
+  assert.equal(financeSnapshot.students.every((student) => student.records.length === 0 && student.communications.length === 0), true);
+  assert.equal(financeSnapshot.ragDocs.some((doc) => doc.title === "退款审批制度"), true);
+  assert.equal(financeSnapshot.ragDocs.some((doc) => doc.title === "张子涵学习记录"), false);
+});
+
+test("accounting period locks block formal finance entries", async () => {
+  const service = new CoreService(new JsonStateStore());
+  const financeContext = {
+    ...defaultRequestContext(),
+    role: "finance" as const,
+    actorName: "财务",
+    scopes: scopesForRole("finance"),
+  };
+  const period = new Date().toISOString().slice(0, 7);
+  const locked = await service.lockAccountingPeriod(period, { note: "测试锁账" }, { context: financeContext });
+  assert.equal(locked.accountingPeriodLocks[0].period, period);
+  await assert.rejects(
+    () => service.recordPayment("order-1", { context: financeContext }),
+    /Accounting period .* is locked/,
+  );
+});
+
 test("lesson correction appends a restore ledger instead of deleting history", async () => {
   const service = new CoreService(new JsonStateStore());
   const attended = await service.markAttendance({ lessonId: "lesson-2", status: "已到课" });
@@ -128,13 +186,13 @@ test("reports aggregate from ledgers and attendance records instead of fixed con
   assert.equal(seed.consumedLessons, 2);
   assert.equal(seed.attendanceRate, 66.7);
   assert.deepEqual(seed.incomeTrend, [1920, 3120, 1740]);
-  assert.deepEqual(seed.teacherPayroll, []);
+  assert.deepEqual(seed.teacherPayroll, [{ teacher: "林老师", lessons: 1, pay: 88 }]);
 
   await service.markAttendance({ lessonId: "lesson-2", status: "已到课" });
   const afterAttendance = await service.reports();
   assert.equal(afterAttendance.consumedLessons, 3);
   assert.equal(afterAttendance.attendanceRate, 75);
-  assert.deepEqual(afterAttendance.teacherPayroll, [{ teacher: "王老师", lessons: 1, pay: 180 }]);
+  assert.deepEqual(afterAttendance.teacherPayroll, [{ teacher: "林老师", lessons: 1, pay: 88 }]);
 
   const created = await service.createOrder({ studentId: "stu-zhang", name: "阅读专项 5课时", amount: 1000, paid: 300, channel: "银行转账" });
   const createdOrder = created.orders[0];
@@ -471,7 +529,8 @@ test("request context enforces auth token and RBAC scopes", () => {
 });
 
 test("local admin can login and use the signed session token as request context", async () => {
-  const auth = new AuthService(new JsonStateStore());
+  const store = new JsonStateStore();
+  const auth = new AuthService(store);
   const session = await auth.login({ email: "admin@cjlass.local", password: "ChangeMe123!" });
   assert.equal(session.user.role, "admin");
   assert.match(session.token, /^v1\./);
@@ -481,6 +540,32 @@ test("local admin can login and use the signed session token as request context"
   assert.equal(context.userId, "user-lin");
   assert.equal(context.actorName, "林老师");
   assert.doesNotThrow(() => assertScope(context, "write:payments"));
+  const state = await new CoreService(store).snapshot();
+  assert.ok(state.auditLogs.some((log) => log.action === "登录成功"));
+});
+
+test("session and API bearer tokens support rotation overlap", async () => {
+  const previousSessionSecret = process.env.AUTH_SESSION_SECRET;
+  const previousSessionSecrets = process.env.AUTH_SESSION_PREVIOUS_SECRETS;
+  const previousApiToken = process.env.API_AUTH_TOKEN;
+  const previousApiTokens = process.env.API_AUTH_TOKEN_PREVIOUS;
+  try {
+    process.env.AUTH_SESSION_SECRET = "old-session-secret";
+    const auth = new AuthService(new JsonStateStore());
+    const session = await auth.login({ email: "admin@cjlass.local", password: "ChangeMe123!" });
+    process.env.AUTH_SESSION_SECRET = "new-session-secret";
+    process.env.AUTH_SESSION_PREVIOUS_SECRETS = "old-session-secret";
+    assert.equal(requestContextFromHeaders({ authorization: `Bearer ${session.token}` }).userId, "user-lin");
+
+    process.env.API_AUTH_TOKEN = "new-api-token";
+    process.env.API_AUTH_TOKEN_PREVIOUS = "old-api-token";
+    assert.equal(requestContextFromHeaders({ authorization: "Bearer old-api-token" }).role, "admin");
+  } finally {
+    restoreEnv("AUTH_SESSION_SECRET", previousSessionSecret);
+    restoreEnv("AUTH_SESSION_PREVIOUS_SECRETS", previousSessionSecrets);
+    restoreEnv("API_AUTH_TOKEN", previousApiToken);
+    restoreEnv("API_AUTH_TOKEN_PREVIOUS", previousApiTokens);
+  }
 });
 
 test("postgres schema uses normalized production tables instead of app_state snapshots", () => {
@@ -519,7 +604,7 @@ test("postgres schema uses normalized production tables instead of app_state sna
 
 test("postgres store keeps tenant writes inside a transaction context", () => {
   const storeSource = readFileSync(new URL("../../src/core/json-state.store.ts", import.meta.url), "utf8");
-  assert.match(storeSource, /POSTGRES_SCHEMA_VERSION = 4/);
+  assert.match(storeSource, /POSTGRES_SCHEMA_VERSION = 6/);
   assert.match(storeSource, /POSTGRES_SCHEMA_CHECKSUM = "[a-f0-9]{64}"/);
   assert.match(storeSource, /assertPostgresSchemaVersion/);
   assert.match(storeSource, /schema version mismatch/);
@@ -537,11 +622,15 @@ test("postgres store runs ordered migration files instead of replaying init snap
     "0002_notification_delivery_state_machine.sql",
     "0003_agent_tool_calls_and_approvals.sql",
     "0004_mvp_business_objects_and_channels.sql",
+    "0005_rag_vector_operations.sql",
+    "0006_finance_controls_and_data_scope.sql",
   ]);
   const initialMigration = readFileSync(new URL("0001_initial_core_schema.sql", migrationDir), "utf8");
   const deliveryMigration = readFileSync(new URL("0002_notification_delivery_state_machine.sql", migrationDir), "utf8");
   const agentMigration = readFileSync(new URL("0003_agent_tool_calls_and_approvals.sql", migrationDir), "utf8");
   const mvpMigration = readFileSync(new URL("0004_mvp_business_objects_and_channels.sql", migrationDir), "utf8");
+  const ragMigration = readFileSync(new URL("0005_rag_vector_operations.sql", migrationDir), "utf8");
+  const financeControlsMigration = readFileSync(new URL("0006_finance_controls_and_data_scope.sql", migrationDir), "utf8");
   assert.match(initialMigration, /CREATE TABLE IF NOT EXISTS tenants\b/);
   assert.doesNotMatch(initialMigration, /INSERT INTO schema_migrations \(version, name, checksum\)/);
   assert.doesNotMatch(initialMigration, /scheduled_for_text TEXT/);
@@ -567,6 +656,18 @@ test("postgres store runs ordered migration files instead of replaying init snap
     assert.match(mvpMigration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`));
     assert.match(mvpMigration, new RegExp(`tenant_isolation_${table}`));
   }
+  assert.match(ragMigration, /ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS embedding vector\(1536\)/);
+  assert.match(ragMigration, /USING ivfflat \(embedding vector_cosine_ops\)/);
+  assert.match(ragMigration, /invalidated_at TIMESTAMPTZ/);
+  for (const table of [
+    "financial_accounts",
+    "accounting_period_locks",
+    "reconciliation_runs",
+  ]) {
+    assert.match(financeControlsMigration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`));
+    assert.match(financeControlsMigration, new RegExp(`tenant_isolation_${table}`));
+  }
+  assert.match(financeControlsMigration, /ALTER TABLE refunds ADD COLUMN IF NOT EXISTS exceptional BOOLEAN/);
 
   const storeSource = readFileSync(new URL("../../src/core/json-state.store.ts", import.meta.url), "utf8");
   assert.match(storeSource, /runPostgresMigrations/);
@@ -582,6 +683,25 @@ test("core service exposes an env-gated notification queue worker", () => {
   assert.match(serviceSource, /processNotificationQueueSafely/);
   assert.match(serviceSource, /setInterval/);
   assert.match(serviceSource, /notificationWorkerRunning/);
+});
+
+test("operations scripts cover backup, restore drills, object storage, and secret rotation", () => {
+  const packageJson = readFileSync(new URL("../../../../package.json", import.meta.url), "utf8");
+  const backupScript = readFileSync(new URL("../../../../scripts/ops/backup-postgres.mjs", import.meta.url), "utf8");
+  const restoreScript = readFileSync(new URL("../../../../scripts/ops/restore-postgres.mjs", import.meta.url), "utf8");
+  const drillScript = readFileSync(new URL("../../../../scripts/ops/restore-drill.mjs", import.meta.url), "utf8");
+  const rotationScript = readFileSync(new URL("../../../../scripts/ops/rotate-secrets.mjs", import.meta.url), "utf8");
+  const runbook = readFileSync(new URL("../../../../docs/operations/backup-recovery.md", import.meta.url), "utf8");
+  assert.match(packageJson, /ops:backup/);
+  assert.match(packageJson, /ops:restore:drill/);
+  assert.match(backupScript, /pg_dump/);
+  assert.match(backupScript, /OBJECT_STORAGE_URI/);
+  assert.match(restoreScript, /pg_restore/);
+  assert.match(drillScript, /DRILL_DATABASE_URL/);
+  assert.match(rotationScript, /AUTH_SESSION_PREVIOUS_SECRETS/);
+  assert.match(runbook, /archive_mode = on/);
+  assert.match(runbook, /object storage/i);
+  assert.match(runbook, /Restore drill/);
 });
 
 test("user management: create, list, update, and reset password", async () => {
@@ -608,7 +728,7 @@ test("user management: create, list, update, and reset password", async () => {
   assert.equal(reset.email, "teacher@example.com");
 });
 
-test("knowledge docs: create, search, and delete", async () => {
+test("knowledge docs: upload, vector search, invalidate, and delete", async () => {
   const service = new CoreService(new JsonStateStore());
   const context = defaultRequestContext();
 
@@ -623,6 +743,8 @@ test("knowledge docs: create, search, and delete", async () => {
   assert.equal(created.ragDocs.length, beforeCount + 1);
   assert.equal(created.knowledgeChunks[0].docId, created.ragDocs[0].id);
   assert.match(created.knowledgeChunks[0].content, /评分细则/);
+  assert.equal(created.knowledgeChunks[0].embeddingProvider, "local-hash");
+  assert.equal(created.knowledgeChunks[0].embedding?.length, 1536);
 
   const searchResult = await service.searchKnowledge("评分细则", 10, context);
   assert.equal(searchResult.results.length >= 1, true);
@@ -630,6 +752,23 @@ test("knowledge docs: create, search, and delete", async () => {
   assert.match(searchResult.results[0].excerpt, /评分细则/);
   assert.equal(searchResult.results[0].sources[0].docId, created.ragDocs[0].id);
 
+  const uploaded = await service.uploadKnowledgeDoc({
+    fileName: "退费制度.json",
+    scope: "机构知识库",
+    mimeType: "application/json",
+    text: JSON.stringify({ policy: { refund: "退款保留原始订单和正式财务分录" } }),
+    expiresAt: "2099-01-01",
+  }, context);
+  assert.equal(uploaded.ragDocs[0].parser, "upload-json");
+  assert.equal(uploaded.ragDocs[0].mimeType, "application/json");
+  assert.match(uploaded.knowledgeChunks[0].content, /正式财务分录/);
+
+  const invalidated = await service.invalidateKnowledgeDoc(uploaded.ragDocs[0].id, { reason: "制度过期" }, context);
+  assert.equal(invalidated.ragDocs[0].status, "已失效");
+  const filtered = await service.searchKnowledge("正式财务分录", 10, context);
+  assert.ok(!filtered.results.some((doc) => doc.id === uploaded.ragDocs[0].id));
+
+  await service.deleteKnowledgeDoc(uploaded.ragDocs[0].id, context);
   const deleted = await service.deleteKnowledgeDoc(created.ragDocs[0].id, context);
   assert.equal(deleted.ragDocs.length, beforeCount);
   assert.ok(!deleted.ragDocs.some((doc) => doc.title === "英语口语测试标准"));
@@ -806,7 +945,10 @@ test("controller exposes user management and knowledge endpoints", () => {
   assert.match(controllerSource, /@Patch\("users\/:id"\)/);
   assert.match(controllerSource, /@Post\("users\/:id\/reset-password"\)/);
   assert.match(controllerSource, /@Post\("knowledge-docs"\)/);
+  assert.match(controllerSource, /@Post\("knowledge-docs\/upload"\)/);
   assert.match(controllerSource, /@Delete\("knowledge-docs\/:id"\)/);
+  assert.match(controllerSource, /@Post\("knowledge-docs\/:id\/invalidate"\)/);
+  assert.match(controllerSource, /@Post\("knowledge-docs\/:id\/reindex"\)/);
   assert.match(controllerSource, /@Post\("knowledge-docs\/:id\/search"\)/);
   assert.match(controllerSource, /@Post\("agent-runs"\)/);
   assert.match(controllerSource, /@Post\("channel-integrations"\)/);
@@ -886,12 +1028,16 @@ test("agent gateway: list MCP tools", async () => {
     "attendance_mark",
     "notification_draft",
     "notification_send",
+    "invoice_issue",
+    "refund_request",
+    "payroll_generate",
+    "payroll_settle",
     "knowledge_search",
   ]);
   assert.equal(tools.filter((t) => t.category === "query").length, 6);
   assert.equal(tools.filter((t) => t.category === "proposal").length, 2);
-  assert.equal(tools.filter((t) => t.category === "execute").length, 4);
-  assert.equal(tools.some((t) => t.category === "high_risk"), false);
+  assert.equal(tools.filter((t) => t.category === "execute").length, 6);
+  assert.equal(tools.filter((t) => t.category === "high_risk").length, 2);
 });
 
 test("agent gateway: get tool by name", async () => {

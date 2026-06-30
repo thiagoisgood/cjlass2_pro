@@ -15,6 +15,10 @@ import {
   type ChannelIntegration,
   type ChannelMessage,
   type CommunicationRecord,
+  type AccountingPeriodLock,
+  type FinancialAccount,
+  type FinancialLedgerEntry,
+  type Invoice,
   type KnowledgeChunk,
   type KnowledgeDoc,
   type Lesson,
@@ -23,6 +27,10 @@ import {
   type NotificationDraft,
   type Order,
   type PaymentLedgerEntry,
+  type PayrollRecord,
+  type PayrollRule,
+  type ReconciliationRun,
+  type Refund,
   type Student,
   type StudentRecord,
   type Template,
@@ -33,8 +41,8 @@ import { defaultAdminEmail, defaultAdminPasswordHash, normalizeEmail } from "./a
 import { type UserRole } from "./request-context.js";
 
 const { Pool } = pg;
-export const POSTGRES_SCHEMA_VERSION = 4;
-export const POSTGRES_SCHEMA_CHECKSUM = "2338eb64efd3ea55d10c0edc7671baffbb9f78290837713141a3c606e0999472";
+export const POSTGRES_SCHEMA_VERSION = 6;
+export const POSTGRES_SCHEMA_CHECKSUM = "12790449de2bc6b7cab90dbc2eaa2d98c3f38ecd55b4195804d8fae45f2c7fc9";
 
 export interface StoreUser {
   userId: string;
@@ -44,6 +52,13 @@ export interface StoreUser {
   displayName: string;
   role: UserRole;
   status: string;
+}
+
+interface KnowledgeVectorSearchFilters {
+  scope?: string;
+  status?: string;
+  includeExpired?: boolean;
+  asOf?: string;
 }
 
 @Injectable()
@@ -102,6 +117,69 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
 
   isDatabaseMode(): boolean {
     return this.pool !== null;
+  }
+
+  async searchKnowledgeByEmbedding(
+    tenantId: string,
+    embedding: number[],
+    limit: number,
+    filters: KnowledgeVectorSearchFilters = {},
+  ): Promise<Array<{ chunk: KnowledgeChunk; score: number }>> {
+    await this.ensureReady();
+    if (!this.pool || !embedding.length) {
+      return [];
+    }
+    const normalizedLimit = Math.max(1, Math.min(Number(limit || 5), 20));
+    const asOf = filters.asOf || new Date().toISOString().slice(0, 10);
+    const params: unknown[] = [
+      tenantId,
+      vectorLiteral(embedding),
+      normalizedLimit,
+      filters.status || "生效中",
+      Boolean(filters.includeExpired),
+      asOf,
+    ];
+    const conditions = [
+      "c.tenant_id = $1",
+      "c.embedding IS NOT NULL",
+      "d.status = $4",
+      "d.invalidated_at IS NULL",
+      "($5::boolean OR d.effective_from IS NULL OR d.effective_from = '' OR d.effective_from::date <= $6::date)",
+      "($5::boolean OR d.expires_at IS NULL OR d.expires_at = '' OR d.expires_at::date >= $6::date)",
+    ];
+    if (filters.scope) {
+      params.push(filters.scope);
+      conditions.push(`d.scope = $${params.length}`);
+    }
+    return this.withTenantTransaction(tenantId, async (client) => {
+      const result = await client.query(
+        `SELECT
+           c.id,
+           c.tenant_id,
+           c.doc_id,
+           c.chunk_index,
+           c.content,
+           c.content_hash,
+           c.embedding::text AS embedding,
+           c.embedding_provider,
+           c.embedding_model,
+           c.embedding_dimension,
+           c.embedded_at,
+           c.metadata || jsonb_build_object(
+             'title', d.title,
+             'scope', d.scope,
+             'sourceLabel', COALESCE(c.metadata->>'sourceLabel', d.title || '#' || (c.chunk_index + 1)::text)
+           ) AS metadata,
+           1 - (c.embedding <=> $2::vector) AS score
+         FROM knowledge_chunks c
+         JOIN knowledge_docs d ON d.id = c.doc_id AND d.tenant_id = c.tenant_id
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY c.embedding <=> $2::vector, c.chunk_index ASC
+         LIMIT $3`,
+        params,
+      );
+      return result.rows.map((row) => ({ chunk: toKnowledgeChunk(row), score: Number(row.score ?? 0) }));
+    });
   }
 
   async save(state: AppSnapshot): Promise<AppSnapshot> {
@@ -419,6 +497,8 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
       );
     }
 
+    await this.upsertTeacherIdentities(client, tenantId, next);
+
     // Lessons: upsert changed
     const prevLessons = previousById(previous?.lessons ?? []);
     for (const [index, lesson] of next.lessons.entries()) {
@@ -460,6 +540,105 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
     for (const entry of next.paymentLedgerEntries) {
       if (!prevPaymentLedgerIds.has(entry.id)) {
         await this.insertPaymentLedgerEntry(client, tenantId, entry);
+      }
+    }
+
+    // Formal finance records
+    const prevInvoices = previousById(previous?.invoices ?? []);
+    for (const invoice of next.invoices ?? []) {
+      const prev = prevInvoices.get(invoice.id);
+      if (!prev || hasEntityChanged(prev, invoice)) {
+        await this.upsertInvoice(client, tenantId, invoice);
+      }
+    }
+    for (const prev of previous?.invoices ?? []) {
+      if (!(next.invoices ?? []).some((item) => item.id === prev.id)) {
+        await client.query("DELETE FROM invoices WHERE id = $1 AND tenant_id = $2", [prev.id, tenantId]);
+      }
+    }
+
+    const prevRefunds = previousById(previous?.refunds ?? []);
+    for (const refund of next.refunds ?? []) {
+      const prev = prevRefunds.get(refund.id);
+      if (!prev || hasEntityChanged(prev, refund)) {
+        await this.upsertRefund(client, tenantId, refund);
+      }
+    }
+    for (const prev of previous?.refunds ?? []) {
+      if (!(next.refunds ?? []).some((item) => item.id === prev.id)) {
+        await client.query("DELETE FROM refunds WHERE id = $1 AND tenant_id = $2", [prev.id, tenantId]);
+      }
+    }
+
+    const prevFinancialLedgerIds = new Set((previous?.financialLedgerEntries ?? []).map((entry) => entry.id));
+    for (const entry of next.financialLedgerEntries ?? []) {
+      if (!prevFinancialLedgerIds.has(entry.id)) {
+        await this.insertFinancialLedgerEntry(client, tenantId, entry);
+      }
+    }
+
+    const prevFinancialAccounts = previousById(previous?.financialAccounts ?? []);
+    for (const account of next.financialAccounts ?? []) {
+      const prev = prevFinancialAccounts.get(account.id);
+      if (!prev || hasEntityChanged(prev, account)) {
+        await this.upsertFinancialAccount(client, tenantId, account);
+      }
+    }
+    for (const prev of previous?.financialAccounts ?? []) {
+      if (!(next.financialAccounts ?? []).some((item) => item.id === prev.id)) {
+        await client.query("DELETE FROM financial_accounts WHERE id = $1 AND tenant_id = $2", [prev.id, tenantId]);
+      }
+    }
+
+    const prevAccountingLocks = previousById(previous?.accountingPeriodLocks ?? []);
+    for (const lock of next.accountingPeriodLocks ?? []) {
+      const prev = prevAccountingLocks.get(lock.id);
+      if (!prev || hasEntityChanged(prev, lock)) {
+        await this.upsertAccountingPeriodLock(client, tenantId, lock);
+      }
+    }
+    for (const prev of previous?.accountingPeriodLocks ?? []) {
+      if (!(next.accountingPeriodLocks ?? []).some((item) => item.id === prev.id)) {
+        await client.query("DELETE FROM accounting_period_locks WHERE id = $1 AND tenant_id = $2", [prev.id, tenantId]);
+      }
+    }
+
+    const prevReconciliationRuns = previousById(previous?.reconciliationRuns ?? []);
+    for (const run of next.reconciliationRuns ?? []) {
+      const prev = prevReconciliationRuns.get(run.id);
+      if (!prev || hasEntityChanged(prev, run)) {
+        await this.upsertReconciliationRun(client, tenantId, run);
+      }
+    }
+    for (const prev of previous?.reconciliationRuns ?? []) {
+      if (!(next.reconciliationRuns ?? []).some((item) => item.id === prev.id)) {
+        await client.query("DELETE FROM reconciliation_runs WHERE id = $1 AND tenant_id = $2", [prev.id, tenantId]);
+      }
+    }
+
+    const prevPayrollRules = previousById(previous?.payrollRules ?? []);
+    for (const rule of next.payrollRules ?? []) {
+      const prev = prevPayrollRules.get(rule.id);
+      if (!prev || hasEntityChanged(prev, rule)) {
+        await this.upsertPayrollRule(client, tenantId, rule);
+      }
+    }
+    for (const prev of previous?.payrollRules ?? []) {
+      if (!(next.payrollRules ?? []).some((item) => item.id === prev.id)) {
+        await client.query("DELETE FROM payroll_rules WHERE id = $1 AND tenant_id = $2", [prev.id, tenantId]);
+      }
+    }
+
+    const prevPayrollRecords = previousById(previous?.payrollRecords ?? []);
+    for (const record of next.payrollRecords ?? []) {
+      const prev = prevPayrollRecords.get(record.id);
+      if (!prev || hasEntityChanged(prev, record)) {
+        await this.upsertPayrollRecord(client, tenantId, record);
+      }
+    }
+    for (const prev of previous?.payrollRecords ?? []) {
+      if (!(next.payrollRecords ?? []).some((item) => item.id === prev.id)) {
+        await client.query("DELETE FROM payroll_records WHERE id = $1 AND tenant_id = $2", [prev.id, tenantId]);
       }
     }
 
@@ -536,10 +715,45 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
       const prev = prevDocs.get(doc.id);
       if (!prev || hasEntityChanged(prev, doc)) {
         await client.query(
-          `INSERT INTO knowledge_docs (id, tenant_id, title, scope, status, updated_at_text, source_count)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, scope = EXCLUDED.scope, status = EXCLUDED.status, updated_at_text = EXCLUDED.updated_at_text, source_count = EXCLUDED.source_count`,
-          [doc.id, tenantId, doc.title, doc.scope, doc.status, doc.updatedAt, doc.sourceCount],
+          `INSERT INTO knowledge_docs (
+             id, tenant_id, title, scope, status, updated_at_text, source_count,
+             source_uri, mime_type, checksum, parser, effective_from, expires_at,
+             invalidated_at, invalidated_by, metadata
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+           ON CONFLICT (id) DO UPDATE SET
+             title = EXCLUDED.title,
+             scope = EXCLUDED.scope,
+             status = EXCLUDED.status,
+             updated_at_text = EXCLUDED.updated_at_text,
+             source_count = EXCLUDED.source_count,
+             source_uri = EXCLUDED.source_uri,
+             mime_type = EXCLUDED.mime_type,
+             checksum = EXCLUDED.checksum,
+             parser = EXCLUDED.parser,
+             effective_from = EXCLUDED.effective_from,
+             expires_at = EXCLUDED.expires_at,
+             invalidated_at = EXCLUDED.invalidated_at,
+             invalidated_by = EXCLUDED.invalidated_by,
+             metadata = EXCLUDED.metadata`,
+          [
+            doc.id,
+            tenantId,
+            doc.title,
+            doc.scope,
+            doc.status,
+            doc.updatedAt,
+            doc.sourceCount,
+            doc.sourceUri ?? "",
+            doc.mimeType ?? "text/plain",
+            doc.checksum ?? "",
+            doc.parser ?? "",
+            doc.effectiveFrom ?? "",
+            doc.expiresAt ?? "",
+            parseTimestamp(doc.invalidatedAt),
+            doc.invalidatedBy ?? null,
+            doc.metadata ?? {},
+          ],
         );
       }
     }
@@ -716,6 +930,269 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  private async upsertTeacherIdentities(client: PoolClient, tenantId: string, state: AppSnapshot) {
+    const names = new Map<string, string>();
+    for (const lesson of state.lessons) {
+      if (lesson.teacher?.trim()) {
+        names.set(teacherIdForName(lesson.teacher), lesson.teacher.trim());
+      }
+    }
+    for (const rule of state.payrollRules ?? []) {
+      if (rule.teacherName?.trim()) {
+        names.set(rule.teacherId || teacherIdForName(rule.teacherName), rule.teacherName.trim());
+      }
+    }
+    for (const record of state.payrollRecords ?? []) {
+      if (record.teacherName?.trim()) {
+        names.set(record.teacherId || teacherIdForName(record.teacherName), record.teacherName.trim());
+      }
+    }
+    for (const [teacherId, displayName] of names.entries()) {
+      await client.query(
+        `INSERT INTO teachers (id, tenant_id, display_name, status, updated_at)
+         VALUES ($1, $2, $3, 'active', now())
+         ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, status = 'active', updated_at = now()`,
+        [teacherId, tenantId, displayName],
+      );
+    }
+  }
+
+  private async upsertInvoice(client: PoolClient, tenantId: string, invoice: Invoice) {
+    await client.query(
+      `INSERT INTO invoices (
+        id, tenant_id, order_id, invoice_no, amount, status, issued_at, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, coalesce($8::timestamptz, now()), coalesce($9::timestamptz, now()))
+      ON CONFLICT (id) DO UPDATE SET
+        order_id = EXCLUDED.order_id,
+        invoice_no = EXCLUDED.invoice_no,
+        amount = EXCLUDED.amount,
+        status = EXCLUDED.status,
+        issued_at = EXCLUDED.issued_at,
+        updated_at = now()`,
+      [
+        invoice.id,
+        tenantId,
+        invoice.orderId,
+        invoice.invoiceNo,
+        invoice.amount,
+        invoice.status,
+        parseTimestamp(invoice.issuedAt),
+        parseTimestamp(invoice.createdAt),
+        parseTimestamp(invoice.updatedAt),
+      ],
+    );
+  }
+
+  private async upsertRefund(client: PoolClient, tenantId: string, refund: Refund) {
+    await client.query(
+      `INSERT INTO refunds (
+        id, tenant_id, order_id, payment_ledger_entry_id, amount, reason, status,
+        requested_by, approved_by, exceptional, exception_code, exception_note, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, coalesce($13::timestamptz, now()), coalesce($14::timestamptz, now()))
+      ON CONFLICT (id) DO UPDATE SET
+        payment_ledger_entry_id = EXCLUDED.payment_ledger_entry_id,
+        amount = EXCLUDED.amount,
+        reason = EXCLUDED.reason,
+        status = EXCLUDED.status,
+        approved_by = EXCLUDED.approved_by,
+        exceptional = EXCLUDED.exceptional,
+        exception_code = EXCLUDED.exception_code,
+        exception_note = EXCLUDED.exception_note,
+        updated_at = now()`,
+      [
+        refund.id,
+        tenantId,
+        refund.orderId,
+        refund.paymentLedgerEntryId ?? null,
+        refund.amount,
+        refund.reason,
+        refund.status,
+        refund.requestedBy,
+        refund.approvedBy ?? null,
+        Boolean(refund.exceptional),
+        refund.exceptionCode ?? null,
+        refund.exceptionNote ?? null,
+        parseTimestamp(refund.createdAt),
+        parseTimestamp(refund.updatedAt),
+      ],
+    );
+  }
+
+  private async insertFinancialLedgerEntry(client: PoolClient, tenantId: string, entry: FinancialLedgerEntry) {
+    await client.query(
+      `INSERT INTO financial_ledger_entries (
+        id, tenant_id, source_type, source_id, student_id, account, direction, amount, occurred_at, created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9::timestamptz, now()), coalesce($10::timestamptz, now()))
+      ON CONFLICT (id) DO NOTHING`,
+      [
+        entry.id,
+        tenantId,
+        entry.sourceType,
+        entry.sourceId,
+        entry.studentId ?? null,
+        entry.account,
+        entry.direction,
+        entry.amount,
+        parseTimestamp(entry.occurredAt),
+        parseTimestamp(entry.createdAt),
+      ],
+    );
+  }
+
+  private async upsertFinancialAccount(client: PoolClient, tenantId: string, account: FinancialAccount) {
+    await client.query(
+      `INSERT INTO financial_accounts (
+        id, tenant_id, code, name, type, normal_balance, status, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), coalesce($9::timestamptz, now()))
+      ON CONFLICT (id) DO UPDATE SET
+        code = EXCLUDED.code,
+        name = EXCLUDED.name,
+        type = EXCLUDED.type,
+        normal_balance = EXCLUDED.normal_balance,
+        status = EXCLUDED.status,
+        updated_at = now()`,
+      [
+        account.id,
+        tenantId,
+        account.code,
+        account.name,
+        account.type,
+        account.normalBalance,
+        account.status,
+        parseTimestamp(account.createdAt),
+        parseTimestamp(account.updatedAt),
+      ],
+    );
+  }
+
+  private async upsertAccountingPeriodLock(client: PoolClient, tenantId: string, lock: AccountingPeriodLock) {
+    await client.query(
+      `INSERT INTO accounting_period_locks (
+        id, tenant_id, period, status, locked_at, locked_by, note, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, coalesce($5::timestamptz, now()), $6, $7, coalesce($8::timestamptz, now()), coalesce($9::timestamptz, now()))
+      ON CONFLICT (id) DO UPDATE SET
+        period = EXCLUDED.period,
+        status = EXCLUDED.status,
+        locked_at = EXCLUDED.locked_at,
+        locked_by = EXCLUDED.locked_by,
+        note = EXCLUDED.note,
+        updated_at = now()`,
+      [
+        lock.id,
+        tenantId,
+        lock.period,
+        lock.status,
+        parseTimestamp(lock.lockedAt),
+        lock.lockedBy,
+        lock.note ?? null,
+        parseTimestamp(lock.createdAt),
+        parseTimestamp(lock.updatedAt),
+      ],
+    );
+  }
+
+  private async upsertReconciliationRun(client: PoolClient, tenantId: string, run: ReconciliationRun) {
+    await client.query(
+      `INSERT INTO reconciliation_runs (
+        id, tenant_id, period, status, debit_total, credit_total, difference, checked_at, checked_by, notes
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), $9, $10)
+      ON CONFLICT (id) DO UPDATE SET
+        period = EXCLUDED.period,
+        status = EXCLUDED.status,
+        debit_total = EXCLUDED.debit_total,
+        credit_total = EXCLUDED.credit_total,
+        difference = EXCLUDED.difference,
+        checked_at = EXCLUDED.checked_at,
+        checked_by = EXCLUDED.checked_by,
+        notes = EXCLUDED.notes`,
+      [
+        run.id,
+        tenantId,
+        run.period,
+        run.status,
+        run.debitTotal,
+        run.creditTotal,
+        run.difference,
+        parseTimestamp(run.checkedAt),
+        run.checkedBy,
+        run.notes,
+      ],
+    );
+  }
+
+  private async upsertPayrollRule(client: PoolClient, tenantId: string, rule: PayrollRule) {
+    const teacherId = rule.teacherId || teacherIdForName(rule.teacherName);
+    await client.query(
+      `INSERT INTO teachers (id, tenant_id, display_name, status, updated_at)
+       VALUES ($1, $2, $3, 'active', now())
+       ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, status = 'active', updated_at = now()`,
+      [teacherId, tenantId, rule.teacherName],
+    );
+    await client.query(
+      `INSERT INTO payroll_rules (
+        id, tenant_id, teacher_id, course_id, rule_type, amount, status, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), coalesce($9::timestamptz, now()))
+      ON CONFLICT (id) DO UPDATE SET
+        teacher_id = EXCLUDED.teacher_id,
+        course_id = EXCLUDED.course_id,
+        rule_type = EXCLUDED.rule_type,
+        amount = EXCLUDED.amount,
+        status = EXCLUDED.status,
+        updated_at = now()`,
+      [
+        rule.id,
+        tenantId,
+        teacherId,
+        rule.courseId ?? null,
+        rule.ruleType,
+        rule.amount,
+        rule.status,
+        parseTimestamp(rule.createdAt),
+        parseTimestamp(rule.updatedAt),
+      ],
+    );
+  }
+
+  private async upsertPayrollRecord(client: PoolClient, tenantId: string, record: PayrollRecord) {
+    const teacherId = record.teacherId || teacherIdForName(record.teacherName);
+    await client.query(
+      `INSERT INTO payroll_records (
+        id, tenant_id, teacher_id, lesson_id, rule_id, amount, status,
+        confirmed_at, settled_at, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::timestamptz, coalesce($10::timestamptz, now()), coalesce($11::timestamptz, now()))
+      ON CONFLICT (id) DO UPDATE SET
+        teacher_id = EXCLUDED.teacher_id,
+        lesson_id = EXCLUDED.lesson_id,
+        rule_id = EXCLUDED.rule_id,
+        amount = EXCLUDED.amount,
+        status = EXCLUDED.status,
+        confirmed_at = EXCLUDED.confirmed_at,
+        settled_at = EXCLUDED.settled_at,
+        updated_at = now()`,
+      [
+        record.id,
+        tenantId,
+        teacherId,
+        record.lessonId ?? null,
+        record.ruleId ?? null,
+        record.amount,
+        record.status,
+        parseTimestamp(record.confirmedAt),
+        parseTimestamp(record.settledAt),
+        parseTimestamp(record.createdAt),
+        parseTimestamp(record.updatedAt),
+      ],
+    );
+  }
+
   private async upsertNotification(client: PoolClient, tenantId: string, note: NotificationDraft, index: number) {
     await client.query(
       `INSERT INTO notification_drafts (
@@ -791,12 +1268,22 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
 
   private async upsertKnowledgeChunk(client: PoolClient, tenantId: string, chunk: KnowledgeChunk) {
     await client.query(
-      `INSERT INTO knowledge_chunks (id, tenant_id, doc_id, chunk_index, content, metadata, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, now())
+      `INSERT INTO knowledge_chunks (
+         id, tenant_id, doc_id, chunk_index, content, metadata,
+         content_hash, embedding, embedding_provider, embedding_model, embedding_dimension, embedded_at,
+         created_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector, $9, $10, $11, $12, now())
        ON CONFLICT (id) DO UPDATE SET
          chunk_index = EXCLUDED.chunk_index,
          content = EXCLUDED.content,
-         metadata = EXCLUDED.metadata`,
+         metadata = EXCLUDED.metadata,
+         content_hash = EXCLUDED.content_hash,
+         embedding = EXCLUDED.embedding,
+         embedding_provider = EXCLUDED.embedding_provider,
+         embedding_model = EXCLUDED.embedding_model,
+         embedding_dimension = EXCLUDED.embedding_dimension,
+         embedded_at = EXCLUDED.embedded_at`,
       [
         chunk.id,
         tenantId,
@@ -809,6 +1296,12 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
           scope: chunk.scope,
           sourceLabel: chunk.sourceLabel,
         },
+        chunk.contentHash ?? "",
+        chunk.embedding?.length ? vectorLiteral(chunk.embedding) : null,
+        chunk.embeddingProvider ?? null,
+        chunk.embeddingModel ?? null,
+        chunk.embeddingDimension ?? null,
+        parseTimestamp(chunk.embeddedAt),
       ],
     );
   }
@@ -1007,6 +1500,28 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
        ORDER BY ple.occurred_at DESC, ple.id ASC`,
       [tenantId],
     );
+    const invoiceResult = await client.query("SELECT * FROM invoices WHERE tenant_id = $1 ORDER BY updated_at DESC, created_at DESC, id ASC", [tenantId]);
+    const refundResult = await client.query("SELECT * FROM refunds WHERE tenant_id = $1 ORDER BY updated_at DESC, created_at DESC, id ASC", [tenantId]);
+    const financialLedgerResult = await client.query("SELECT * FROM financial_ledger_entries WHERE tenant_id = $1 ORDER BY occurred_at DESC, id ASC", [tenantId]);
+    const financialAccountResult = await client.query("SELECT * FROM financial_accounts WHERE tenant_id = $1 ORDER BY code ASC, created_at ASC", [tenantId]);
+    const accountingLockResult = await client.query("SELECT * FROM accounting_period_locks WHERE tenant_id = $1 ORDER BY period DESC, locked_at DESC", [tenantId]);
+    const reconciliationResult = await client.query("SELECT * FROM reconciliation_runs WHERE tenant_id = $1 ORDER BY checked_at DESC, id ASC", [tenantId]);
+    const payrollRuleResult = await client.query(
+      `SELECT pr.*, t.display_name AS teacher_name
+       FROM payroll_rules pr
+       LEFT JOIN teachers t ON t.id = pr.teacher_id
+       WHERE pr.tenant_id = $1
+       ORDER BY pr.updated_at DESC, pr.id ASC`,
+      [tenantId],
+    );
+    const payrollRecordResult = await client.query(
+      `SELECT pr.*, t.display_name AS teacher_name
+       FROM payroll_records pr
+       LEFT JOIN teachers t ON t.id = pr.teacher_id
+       WHERE pr.tenant_id = $1
+       ORDER BY pr.updated_at DESC, pr.created_at DESC, pr.id ASC`,
+      [tenantId],
+    );
     const notificationResult = await client.query("SELECT * FROM notification_drafts WHERE tenant_id = $1 ORDER BY sort_order ASC, updated_at ASC", [tenantId]);
     const deliveryResult = await client.query("SELECT * FROM notification_deliveries WHERE tenant_id = $1 ORDER BY updated_at DESC, created_at DESC, id ASC", [tenantId]);
     const taskResult = await client.query("SELECT * FROM business_tasks WHERE tenant_id = $1 ORDER BY sort_order ASC, updated_at ASC", [tenantId]);
@@ -1067,6 +1582,14 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
       orders: orderResult.rows.map(toOrder),
       lessonLedgerEntries: lessonLedgerResult.rows.map(toLessonLedgerEntry),
       paymentLedgerEntries: paymentLedgerResult.rows.map(toPaymentLedgerEntry),
+      invoices: invoiceResult.rows.map(toInvoice),
+      refunds: refundResult.rows.map(toRefund),
+      financialLedgerEntries: financialLedgerResult.rows.map(toFinancialLedgerEntry),
+      financialAccounts: financialAccountResult.rows.map(toFinancialAccount),
+      accountingPeriodLocks: accountingLockResult.rows.map(toAccountingPeriodLock),
+      reconciliationRuns: reconciliationResult.rows.map(toReconciliationRun),
+      payrollRules: payrollRuleResult.rows.map(toPayrollRule),
+      payrollRecords: payrollRecordResult.rows.map(toPayrollRecord),
       notifications: notificationResult.rows.map(toNotification),
       notificationDeliveries: deliveryResult.rows.map(toNotificationDelivery),
       tasks: taskResult.rows.map((row): BusinessTask => ({
@@ -1114,6 +1637,15 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
         status: String(row.status),
         updatedAt: String(row.updated_at_text),
         sourceCount: Number(row.source_count),
+        sourceUri: String(row.source_uri ?? ""),
+        mimeType: String(row.mime_type ?? ""),
+        checksum: String(row.checksum ?? ""),
+        parser: String(row.parser ?? ""),
+        effectiveFrom: String(row.effective_from ?? ""),
+        expiresAt: String(row.expires_at ?? ""),
+        invalidatedAt: row.invalidated_at ? String(row.invalidated_at) : undefined,
+        invalidatedBy: row.invalidated_by ? String(row.invalidated_by) : undefined,
+        metadata: (row.metadata ?? {}) as Record<string, string | number | boolean>,
       })),
       knowledgeChunks: knowledgeChunkResult.rows.map(toKnowledgeChunk),
       channelIntegrations: channelResult.rows.map((row): ChannelIntegration => ({
@@ -1217,6 +1749,7 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
         [`course-${tenantId}-${index + 1}`, tenantId, course.title, course.type, course.price],
       );
     }
+    await this.upsertTeacherIdentities(client, tenantId, state);
 
     for (const [index, lesson] of state.lessons.entries()) {
       await client.query(
@@ -1303,6 +1836,38 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
           entry.reversesEntryId ?? null,
         ],
       );
+    }
+
+    for (const invoice of state.invoices ?? []) {
+      await this.upsertInvoice(client, tenantId, invoice);
+    }
+
+    for (const refund of state.refunds ?? []) {
+      await this.upsertRefund(client, tenantId, refund);
+    }
+
+    for (const entry of state.financialLedgerEntries ?? []) {
+      await this.insertFinancialLedgerEntry(client, tenantId, entry);
+    }
+
+    for (const account of state.financialAccounts ?? []) {
+      await this.upsertFinancialAccount(client, tenantId, account);
+    }
+
+    for (const lock of state.accountingPeriodLocks ?? []) {
+      await this.upsertAccountingPeriodLock(client, tenantId, lock);
+    }
+
+    for (const run of state.reconciliationRuns ?? []) {
+      await this.upsertReconciliationRun(client, tenantId, run);
+    }
+
+    for (const rule of state.payrollRules ?? []) {
+      await this.upsertPayrollRule(client, tenantId, rule);
+    }
+
+    for (const record of state.payrollRecords ?? []) {
+      await this.upsertPayrollRecord(client, tenantId, record);
     }
 
     for (const [index, note] of state.notifications.entries()) {
@@ -1457,9 +2022,12 @@ export class JsonStateStore implements OnModuleInit, OnModuleDestroy {
       "channel_accounts",
       "knowledge_chunks",
       "documents",
+      "reconciliation_runs",
+      "accounting_period_locks",
       "payroll_records",
       "payroll_rules",
       "financial_ledger_entries",
+      "financial_accounts",
       "refunds",
       "invoices",
       "learning_records",
@@ -1709,6 +2277,123 @@ function toPaymentLedgerEntry(row: Record<string, unknown>): PaymentLedgerEntry 
   };
 }
 
+function toInvoice(row: Record<string, unknown>): Invoice {
+  return {
+    id: String(row.id),
+    orderId: String(row.order_id),
+    invoiceNo: String(row.invoice_no),
+    amount: Number(row.amount),
+    status: row.status as Invoice["status"],
+    issuedAt: row.issued_at == null ? undefined : timestampText(row.issued_at),
+    createdAt: timestampText(row.created_at),
+    updatedAt: timestampText(row.updated_at),
+  };
+}
+
+function toRefund(row: Record<string, unknown>): Refund {
+  return {
+    id: String(row.id),
+    orderId: String(row.order_id),
+    paymentLedgerEntryId: nullableText(row.payment_ledger_entry_id),
+    amount: Number(row.amount),
+    reason: String(row.reason),
+    status: row.status as Refund["status"],
+    requestedBy: String(row.requested_by),
+    approvedBy: nullableText(row.approved_by),
+    exceptional: Boolean(row.exceptional),
+    exceptionCode: nullableText(row.exception_code),
+    exceptionNote: nullableText(row.exception_note),
+    createdAt: timestampText(row.created_at),
+    updatedAt: timestampText(row.updated_at),
+  };
+}
+
+function toFinancialLedgerEntry(row: Record<string, unknown>): FinancialLedgerEntry {
+  return {
+    id: String(row.id),
+    sourceType: row.source_type as FinancialLedgerEntry["sourceType"],
+    sourceId: String(row.source_id),
+    studentId: nullableText(row.student_id),
+    account: String(row.account),
+    direction: row.direction as FinancialLedgerEntry["direction"],
+    amount: Number(row.amount),
+    occurredAt: timestampText(row.occurred_at),
+    createdAt: timestampText(row.created_at),
+  };
+}
+
+function toFinancialAccount(row: Record<string, unknown>): FinancialAccount {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    type: row.type as FinancialAccount["type"],
+    normalBalance: row.normal_balance as FinancialAccount["normalBalance"],
+    status: row.status as FinancialAccount["status"],
+    createdAt: timestampText(row.created_at),
+    updatedAt: timestampText(row.updated_at),
+  };
+}
+
+function toAccountingPeriodLock(row: Record<string, unknown>): AccountingPeriodLock {
+  return {
+    id: String(row.id),
+    period: String(row.period),
+    status: "locked",
+    lockedAt: timestampText(row.locked_at),
+    lockedBy: String(row.locked_by),
+    note: nullableText(row.note),
+    createdAt: timestampText(row.created_at),
+    updatedAt: timestampText(row.updated_at),
+  };
+}
+
+function toReconciliationRun(row: Record<string, unknown>): ReconciliationRun {
+  return {
+    id: String(row.id),
+    period: String(row.period),
+    status: row.status as ReconciliationRun["status"],
+    debitTotal: Number(row.debit_total),
+    creditTotal: Number(row.credit_total),
+    difference: Number(row.difference),
+    checkedAt: timestampText(row.checked_at),
+    checkedBy: String(row.checked_by),
+    notes: Array.isArray(row.notes) ? row.notes.map(String) : [],
+  };
+}
+
+function toPayrollRule(row: Record<string, unknown>): PayrollRule {
+  const teacherName = String(row.teacher_name ?? row.teacher_id ?? "未指定教师");
+  return {
+    id: String(row.id),
+    teacherId: nullableText(row.teacher_id),
+    teacherName,
+    courseId: nullableText(row.course_id),
+    ruleType: row.rule_type as PayrollRule["ruleType"],
+    amount: Number(row.amount),
+    status: row.status as PayrollRule["status"],
+    createdAt: timestampText(row.created_at),
+    updatedAt: timestampText(row.updated_at),
+  };
+}
+
+function toPayrollRecord(row: Record<string, unknown>): PayrollRecord {
+  const teacherName = String(row.teacher_name ?? row.teacher_id ?? "未指定教师");
+  return {
+    id: String(row.id),
+    teacherId: nullableText(row.teacher_id),
+    teacherName,
+    lessonId: nullableText(row.lesson_id),
+    ruleId: nullableText(row.rule_id),
+    amount: Number(row.amount),
+    status: row.status as PayrollRecord["status"],
+    confirmedAt: row.confirmed_at == null ? undefined : timestampText(row.confirmed_at),
+    settledAt: row.settled_at == null ? undefined : timestampText(row.settled_at),
+    createdAt: timestampText(row.created_at),
+    updatedAt: timestampText(row.updated_at),
+  };
+}
+
 function toNotification(row: Record<string, unknown>): NotificationDraft {
   return {
     id: String(row.id),
@@ -1752,7 +2437,36 @@ function toKnowledgeChunk(row: Record<string, unknown>): KnowledgeChunk {
     content: String(row.content),
     sourceLabel: String(metadata.sourceLabel ?? `${row.doc_id}#${row.chunk_index}`),
     metadata,
+    contentHash: String(row.content_hash ?? ""),
+    embedding: parseVectorValue(row.embedding),
+    embeddingProvider: row.embedding_provider ? String(row.embedding_provider) : undefined,
+    embeddingModel: row.embedding_model ? String(row.embedding_model) : undefined,
+    embeddingDimension: row.embedding_dimension == null ? undefined : Number(row.embedding_dimension),
+    embeddedAt: row.embedded_at ? String(row.embedded_at) : undefined,
   };
+}
+
+function vectorLiteral(vector: number[]): string {
+  return `[${vector.map((value) => Number(value).toFixed(8)).join(",")}]`;
+}
+
+function parseVectorValue(value: unknown): number[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return value.map(Number).filter(Number.isFinite);
+  }
+  const text = String(value).trim();
+  if (!text.startsWith("[") || !text.endsWith("]")) {
+    return undefined;
+  }
+  const vector = text
+    .slice(1, -1)
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter(Number.isFinite);
+  return vector.length ? vector : undefined;
 }
 
 function toChannelAccount(row: Record<string, unknown>): ChannelAccount {
@@ -1904,6 +2618,14 @@ function uniqueCourses(lessons: Lesson[]): Array<{ title: string; type: string; 
     courses.set(key, { title: lesson.title, type: lesson.type, price: lesson.price });
   }
   return [...courses.values()];
+}
+
+function teacherIdForName(name: string): string {
+  const normalized = name.trim().toLowerCase()
+    .replace(/老师/g, "lao-shi")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+  return `teacher-${normalized || "unknown"}`;
 }
 
 function normalizeRole(role: string): UserRole {

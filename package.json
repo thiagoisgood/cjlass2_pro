@@ -17,6 +17,10 @@
     "test": "npm run test -ws --if-present",
     "lint": "npm run lint -ws --if-present",
     "seed": "npm run seed -w @cjlass2/api",
+    "ops:backup": "node scripts/ops/backup-postgres.mjs",
+    "ops:restore": "node scripts/ops/restore-postgres.mjs",
+    "ops:restore:drill": "node scripts/ops/restore-drill.mjs",
+    "ops:rotate-secrets": "node scripts/ops/rotate-secrets.mjs",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"
   },
