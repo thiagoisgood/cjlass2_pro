@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus, Send, BellRing, SquarePen, Save, Clock, Receipt } from "lucide-react";
 import { PageHeader, Panel, EmptyState } from "../components/Common.jsx";
+import { Button } from "../components/ui/Button.jsx";
 import { api } from "../api.js";
 
 export function NotificationsPage({
@@ -49,15 +50,15 @@ export function NotificationsPage({
                 </label>
               </div>
               <div className="editor-actions">
-                <button className="primary-button" type="button" onClick={() => runMutation(() => api.sendNotification(selectedNotification.id), "通知已发送")}>
+                <Button variant="primary" type="button" onClick={() => runMutation(() => api.sendNotification(selectedNotification.id), "通知已发送")}>
                   <Send size={16} /> 立即发送
-                </button>
-                <button className="secondary-button" type="button" onClick={() => runMutation(() => api.updateNotification(selectedNotification.id, { status: "草稿" }), "草稿已保存")}>
+                </Button>
+                <Button variant="secondary" type="button" onClick={() => runMutation(() => api.updateNotification(selectedNotification.id, { status: "草稿" }), "草稿已保存")}>
                   <Save size={16} /> 保存草稿
-                </button>
-                <button className="secondary-button" type="button" onClick={() => runMutation(() => api.scheduleNotification(selectedNotification.id, "明日 09:00"), "通知已预约发送")}>
+                </Button>
+                <Button variant="secondary" type="button" onClick={() => runMutation(() => api.scheduleNotification(selectedNotification.id, "明日 09:00"), "通知已预约发送")}>
                   <Clock size={16} /> 预约发送
-                </button>
+                </Button>
               </div>
               <div className="wechat-preview">
                 <span>微信预览</span>

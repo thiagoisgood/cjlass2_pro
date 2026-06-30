@@ -1,6 +1,9 @@
 import React from "react";
 import { TabletSmartphone } from "lucide-react";
 import { api } from "../api.js";
+import { Button } from "./ui/Button.jsx";
+import { Badge } from "./ui/Badge.jsx";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/Card.jsx";
 
 const toneClass = {
   blue: "tone-blue",
@@ -22,15 +25,15 @@ export function PageHeader({ title, description, actions = [] }) {
         {actions.map((action) => {
           const Icon = action.icon;
           return (
-            <button
+            <Button
               key={action.label}
-              className={action.primary ? "primary-button" : "secondary-button"}
+              variant={action.primary ? "primary" : "secondary"}
               type="button"
               onClick={action.onClick}
             >
               {Icon && <Icon size={16} />}
               {action.label}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -40,13 +43,13 @@ export function PageHeader({ title, description, actions = [] }) {
 
 export function Panel({ title, icon: Icon, children, className = "" }) {
   return (
-    <section className={`panel ${className}`}>
-      <div className="panel-title">
-        <h2>{title}</h2>
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
         {Icon ? <span><Icon size={18} /></span> : null}
-      </div>
+      </CardHeader>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -74,11 +77,11 @@ export function MiniStat({ label, value }) {
 
 export function StudentStat({ label, value, action, onClick }) {
   return (
-    <div className="student-stat">
+    <Card className="student-stat">
       <small>{label}</small>
       <strong>{value}</strong>
-      <button type="button" onClick={onClick}>{action}</button>
-    </div>
+      <Button variant="ghost" type="button" onClick={onClick}>{action}</Button>
+    </Card>
   );
 }
 

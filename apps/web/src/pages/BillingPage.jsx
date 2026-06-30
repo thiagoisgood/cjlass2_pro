@@ -1,6 +1,8 @@
 import React from "react";
 import { Plus, Receipt, BellRing, Download, CircleDollarSign, AlertTriangle, WalletCards, FileText, Users, Database } from "lucide-react";
-import { PageHeader, Panel } from "../components/Common.jsx";
+import { PageHeader, Panel, MetricCard } from "../components/Common.jsx";
+import { Button } from "../components/ui/Button.jsx";
+import { Badge } from "../components/ui/Badge.jsx";
 import { api } from "../api.js";
 
 function currency(value) {
@@ -51,10 +53,11 @@ export function BillingPage({ snapshot, setModal, runMutation, openExport, setVi
                   <p>{order.name}</p>
                   <b>{currency(order.amount - order.paid)}</b>
                   <div className="button-row">
-                    <button className="primary-button compact" type="button" onClick={() => runMutation(() => api.recordPayment(order.id), "支付流水已结清订单")}>记录收款</button>
-                    <button className="secondary-button compact" type="button" onClick={() => runMutation(() => api.issueInvoice(order.id), "发票已开具并写入分录")}>开票</button>
-                    <button
-                      className="secondary-button compact"
+                    <Button variant="primary" size="compact" type="button" onClick={() => runMutation(() => api.recordPayment(order.id), "支付流水已结清订单")}>记录收款</Button>
+                    <Button variant="secondary" size="compact" type="button" onClick={() => runMutation(() => api.issueInvoice(order.id), "发票已开具并写入分录")}>开票</Button>
+                    <Button
+                      variant="secondary"
+                      size="compact"
                       type="button"
                       onClick={() =>
                         runMutation(
@@ -71,7 +74,7 @@ export function BillingPage({ snapshot, setModal, runMutation, openExport, setVi
                       }
                     >
                       催缴
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))
@@ -82,8 +85,8 @@ export function BillingPage({ snapshot, setModal, runMutation, openExport, setVi
         </Panel>
         <Panel title="订单流水" icon={FileText} className="orders-panel">
           <div className="table-toolbar">
-            <button className="field-button" type="button" onClick={() => setView("reports")}><CircleDollarSign size={15} />查看报表</button>
-            <button className="field-button" type="button" onClick={() => openExport("orders")}><Download size={15} />导出 CSV</button>
+            <Button variant="field" type="button" onClick={() => setView("reports")}><CircleDollarSign size={15} />查看报表</Button>
+            <Button variant="field" type="button" onClick={() => openExport("orders")}><Download size={15} />导出 CSV</Button>
           </div>
           <table className="data-table compact-table">
             <thead><tr><th>学员</th><th>订单</th><th>金额</th><th>已收</th><th>状态</th><th>操作</th></tr></thead>
@@ -95,14 +98,14 @@ export function BillingPage({ snapshot, setModal, runMutation, openExport, setVi
                     <td>{order.name}</td>
                     <td>{currency(order.amount)}</td>
                     <td>{currency(order.paid)}</td>
-                    <td><span className={`status-pill ${order.status === "已结清" ? "tone-green" : "tone-orange"}`}>{order.status}</span></td>
+                    <td><Badge tone={order.status === "已结清" ? "green" : "orange"}>{order.status}</Badge></td>
                     <td>
                       <div className="inline-actions">
-                        <button className="link-button" type="button" onClick={() => order.status === "已结清" ? setView("reports") : runMutation(() => api.recordPayment(order.id), "订单已结清")}>
+                        <Button variant="link" type="button" onClick={() => order.status === "已结清" ? setView("reports") : runMutation(() => api.recordPayment(order.id), "订单已结清")}>
                           {order.status === "align-green" || order.status === "已结清" ? "看报表" : "收款"}
-                        </button>
-                        <button className="link-button" type="button" onClick={() => runMutation(() => api.issueInvoice(order.id), "发票已开具")}>开票</button>
-                        {order.paid > 0 ? <button className="link-button danger-link" type="button" onClick={() => runMutation(() => api.requestRefund({ orderId: order.id, amount: Math.min(order.paid, 300), reason: `${order.student}${order.name}退款申请` }), "退款申请已提交")}>退款</button> : null}
+                        </Button>
+                        <Button variant="link" type="button" onClick={() => runMutation(() => api.issueInvoice(order.id), "发票已开具")}>开票</Button>
+                        {order.paid > 0 ? <Button variant="link" tone="danger" type="button" onClick={() => runMutation(() => api.requestRefund({ orderId: order.id, amount: Math.min(order.paid, 300), reason: `${order.student}${order.name}退款申请` }), "退款申请已提交")}>退款</Button> : null}
                       </div>
                     </td>
                   </tr>
@@ -141,8 +144,8 @@ export function BillingPage({ snapshot, setModal, runMutation, openExport, setVi
                       <strong>{currency(refund.amount)}</strong>
                       <small>{order?.student || refund.orderId} · {refund.status}</small>
                       <div className="inline-actions">
-                        {refund.status === "requested" ? <button className="link-button" type="button" onClick={() => runMutation(() => api.approveRefund(refund.id), "退款已审批")}>审批</button> : null}
-                        {refund.status === "approved" ? <button className="link-button" type="button" onClick={() => runMutation(() => api.settleRefund(refund.id), "退款已结算")}>结算</button> : null}
+                        {refund.status === "requested" ? <Button variant="link" type="button" onClick={() => runMutation(() => api.approveRefund(refund.id), "退款已审批")}>审批</Button> : null}
+                        {refund.status === "approved" ? <Button variant="link" type="button" onClick={() => runMutation(() => api.settleRefund(refund.id), "退款已结算")}>结算</Button> : null}
                       </div>
                     </div>
                   );
@@ -162,11 +165,11 @@ export function BillingPage({ snapshot, setModal, runMutation, openExport, setVi
                   <tr key={record.id}>
                     <td>{record.teacherName}</td>
                     <td>{currency(record.amount)}</td>
-                    <td><span className={`status-pill ${record.status === "settled" ? "tone-green" : "tone-orange"}`}>{record.status}</span></td>
+                    <td><Badge tone={record.status === "settled" ? "green" : "orange"}>{record.status}</Badge></td>
                     <td>
                       <div className="inline-actions">
-                        {record.status === "pending" ? <button className="link-button" type="button" onClick={() => runMutation(() => api.confirmPayrollRecord(record.id), "课酬已确认")}>确认</button> : null}
-                        {record.status === "confirmed" ? <button className="link-button" type="button" onClick={() => runMutation(() => api.settlePayrollRecord(record.id), "课酬已结算")}>结算</button> : null}
+                        {record.status === "pending" ? <Button variant="link" type="button" onClick={() => runMutation(() => api.confirmPayrollRecord(record.id), "课酬已确认")}>确认</Button> : null}
+                        {record.status === "confirmed" ? <Button variant="link" type="button" onClick={() => runMutation(() => api.settlePayrollRecord(record.id), "课酬已结算")}>结算</Button> : null}
                       </div>
                     </td>
                   </tr>
@@ -198,27 +201,5 @@ export function BillingPage({ snapshot, setModal, runMutation, openExport, setVi
         </Panel>
       </div>
     </section>
-  );
-}
-
-const toneClass = {
-  blue: "tone-blue",
-  green: "tone-green",
-  orange: "tone-orange",
-  purple: "tone-purple",
-  red: "tone-red",
-  gray: "tone-gray",
-};
-
-function MetricCard({ icon: Icon, tone, label, value, helper }) {
-  return (
-    <div className="metric-card">
-      <span className={`metric-icon ${toneClass[tone] || "tone-gray"}`}><Icon size={20} /></span>
-      <span className="metric-copy">
-        <small>{label}</small>
-        <strong>{value}</strong>
-        <em>{helper}</em>
-      </span>
-    </div>
   );
 }

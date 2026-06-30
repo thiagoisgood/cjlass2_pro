@@ -1,6 +1,6 @@
 # 项目完成度审计
 
-检查时间：2026-06-29  
+检查时间：2026-06-30  
 检查对象：本地当前工作树 `/Users/thiago/program/AL/cjlass2_pro`  
 依据文档：[resource/独立教师与小机构智能教务系统_最终产品技术方案.md](resource/独立教师与小机构智能教务系统_最终产品技术方案.md)
 
@@ -10,22 +10,25 @@
 
 - **内部可演示 MVP：约 95%**。Web/API/PostgreSQL/Redis/RAG/财务/课酬/MCP/完整浏览器业务流均有本地代码和测试证据。
 - **需求文档第一阶段 MVP：约 88%-92%**。第一阶段核心业务、审计、RAG、MCP、备份恢复脚本已基本闭环；剩余主要是外部真实渠道、真实 Hermes 编排和更细的数据范围权限。
-- **生产上线准备度：约 72%-78%**。已有备份恢复脚本、密钥轮换、登录审计、恢复演练脚本和本地演练证据；仍需在真实生产 PostgreSQL 16 + pgvector、对象存储、WAL 和真实渠道凭据上完成演练。
+- **生产上线准备度：约 74%-80%**。已有备份恢复脚本、密钥轮换、登录审计、恢复演练脚本和本地验证证据；仍需在真实生产 PostgreSQL 16 + pgvector、对象存储、WAL、真实渠道凭据和远端环境上完成演练。
 - **最终产品完成度：约 62%-68%**。最终产品要求多端、完整渠道网关、复杂 Agent/Hermes、多角色数据权限、深度报表和运营体验，目前仍是模块化单体 MVP。
 
 重要说明：
 
 - 当前审计基于**本地当前工作树**。存在未提交变更，且未重新验证远端 `47.100.87.41` 是否已部署这些最新本地改动。
-- 2026-06-29 本地验证通过：`npm run build`、`npm run test -w @cjlass2/api`、`npm run test:e2e -w @cjlass2/web`。
-- API 单测当前为 **49 个**，Web Playwright 当前为 **8 个**。
+- 2026-06-30 本地验证通过：`npm run build`、`npm run lint`、`npm run test -w @cjlass2/api`、`npm run test:e2e -w @cjlass2/web`、`docker compose config --quiet`。
+- API 单测当前为 **54 个**，Web Playwright 当前为 **8 个**。
+- 当前本机 Node 为 `v18.20.7`，低于项目 `package.json` 声明的 `engines.node >=20`；发布流水线和服务器运行环境需固定 Node 20+。
 
 ## 本次实际验证
 
 | 检查项 | 结果 |
 | --- | --- |
 | `npm run build` | 通过，shared/api/web 均完成构建。 |
-| `npm run test -w @cjlass2/api` | 通过，API `51` 个 node:test 单测全部通过。 |
-| `npm run test:e2e -w @cjlass2/web` | 通过，Playwright `8` 项通过，包含完整浏览器业务流。 |
+| `npm run lint` | 通过，shared/api TypeScript noEmit 与 web Vite build 均通过。 |
+| `npm run test -w @cjlass2/api` | 通过，API `54` 个 node:test 单测全部通过。 |
+| `npm run test:e2e -w @cjlass2/web` | 首轮发现报表页 `MetricCard` 缺失导入导致完整业务流崩溃；已修复 `apps/web/src/pages/ReportsPage.jsx` 后重跑通过，Playwright `8` 项通过。 |
+| `docker compose config --quiet` | 通过，compose 配置可解析；尚未在本轮重建/重启远端生产容器。 |
 | 财务与权限 schema | 迁移版本已到 `0006_finance_controls_and_data_scope.sql`，`POSTGRES_SCHEMA_VERSION = 6`。 |
 | RAG 行为 | 单测覆盖上传解析、embedding、本地向量降级、搜索、失效过滤和删除。 |
 | 完整浏览器业务流 | 覆盖登录、新增学员、创建订单、排课、点名、收款、通知、报表、审计。 |
@@ -65,8 +68,9 @@
    - 新增 session/API token 轮换脚本和 previous secret/token 兼容窗口。
    - 登录成功/失败写入审计流水。
 
-5. **README 口径**
-   - README 已更新为 16 个 MCP 工具、迁移版本 5、API 单测 49、Web e2e 8。
+5. **README 与验证口径**
+   - README/CLAUDE 已更新为 16 个 MCP 工具、迁移版本 6、API 单测 54、Web e2e 8。
+   - 本轮修复了 UI 组件整理后的报表页运行时导入缺口，完整浏览器业务流恢复通过。
 
 ## 需求矩阵
 
@@ -83,14 +87,14 @@
 | 报表 | 部分完成 | 64% | 收入、课消、到课率、课酬、账本核对可用。缺更多经营分析、钻取、SQL 读模型和导出格式。 |
 | Auth/RBAC/Tenant | 部分完成 | 72% | Bearer/session/RBAC/RLS、密钥轮换窗口、登录审计可用。缺完整组织成员、班级/教师/财务数据范围权限。 |
 | 审计、幂等、可靠性 | 基本完成 | 80% | 核心 mutation 走幂等，关键业务写审计，登录审计已补。仍需更多异常路径和批处理任务审计。 |
-| PostgreSQL/Redis 基础设施 | 基本完成 | 82% | migration 1..5、RLS、Redis queue、pgvector schema 已有。需在生产 PG16+pgvector 上重跑恢复演练。 |
+| PostgreSQL/Redis 基础设施 | 基本完成 | 82% | migration 1..6、RLS、Redis queue、pgvector schema 已有。需在生产 PG16+pgvector 上重跑恢复演练。 |
 | MCP 工具 | 基本完成 | 86% | 16 个工具，覆盖查询、方案、执行、高风险财务/课酬。缺更严格 JSON Schema、权限矩阵和真实 Agent 多轮编排。 |
 | Agent Gateway / Hermes | 部分完成 | 58% | Hermes/OpenAI-compatible 调用路径存在，失败降级本地解释；审批持久化和工具调用审计可用。真实 Hermes 服务、SSE 事件、多轮追问和复杂槽位填充仍不足。 |
 | 自然语言操作 | 部分完成 | 56% | 支持排课、发票、退款、课酬等关键词命令；缺真实大模型驱动、多轮确认和歧义消解。 |
 | RAG | 基本完成 | 82% | embedding provider、pgvector 排序、上传解析、有效期/失效过滤、source 引用均有实现和测试。需接真实 embedding key 并用生产 pgvector 数据量压测。 |
 | Channel Gateway / 聊天渠道 | 部分完成 | 58% | 企业微信回调、签名、去重、账号绑定、卡片确认最小闭环。缺真实企微/飞书/钉钉全协议、AES、回执和运维配置页。 |
 | 备份与恢复 | 部分完成 | 70% | 脚本、manifest、对象存储入口、runbook、本地 pg_dump/restore drill 已有。缺生产 WAL 配置落地、对象存储真实账号演练、PG16+pgvector 完整恢复演练。 |
-| 测试覆盖 | 较好 | 82% | API 49 单测 + Web 8 Playwright 通过。缺真实外部渠道、真实 embedding provider、生产数据库恢复和压力/并发测试。 |
+| 测试覆盖 | 较好 | 84% | API 54 单测 + Web 8 Playwright 通过。缺真实外部渠道、真实 embedding provider、生产数据库恢复和压力/并发测试。 |
 
 ## 验收标准对照
 
@@ -105,29 +109,41 @@
 
 ## 剩余高优先级事项
 
-1. **真实外部集成**
+1. **远端发布与当前变更落地**
+   - 当前工作树仍有多处未提交 Web UI 改动和新增 `apps/web/src/components/ui/` 组件；发布前需要提交、打包并部署到远端。
+   - 远端执行 migration 0006、health、Hermes status、RAG smoke、完整 e2e 或等价生产 smoke。
+   - 远端必须确认 API 运行在 PostgreSQL database mode，而不是内存/种子数据降级。
+
+2. **生产安全配置**
+   - 生产必须显式配置强 `API_AUTH_TOKEN`、`AUTH_SESSION_SECRET`、`WEBHOOK_SECRET`、`WECOM_CALLBACK_SECRET` 等密钥，不能依赖开发默认值或空值。
+   - Webhook 容器拥有 Docker socket 和项目目录写权限，必须只暴露在强签名、受控网络和可审计入口后。
+   - 当前前端引入 Google Fonts 外链；若面向国内生产网络，应改为本地字体或移除外部阻塞依赖。
+
+3. **真实外部集成**
    - 配置并验证真实企业微信/微信 H5/飞书/钉钉凭据。
    - 补平台原生 AES/签名、送达回执、模板审核和失败告警。
 
-2. **真实 Hermes / 大模型闭环**
+4. **真实 Hermes / 大模型闭环**
    - 接真实 Hermes Agent 或 OpenAI-compatible 服务。
    - 增加多轮追问、复杂槽位填充、歧义消解和审批上下文。
 
-3. **生产恢复演练**
+5. **生产恢复演练**
    - 在可拉取 `pgvector/pgvector:pg16` 或真实 PG16+pgvector 环境重跑完整 backup/restore drill。
    - 配置 WAL 归档和对象存储真实 bucket，并做一次从 dump + WAL 的演练。
 
-4. **权限和数据范围**
+6. **权限和数据范围**
    - 已补教师/财务/助教/只读用户的数据范围权限。
    - `snapshot`、列表、报表、导出、知识库搜索和 MCP 查询工具均按角色裁剪。
    - 学生知识库和财务数据已加入二次过滤：学生知识限定管理员/关联教师/助教，财务知识限定管理员/财务。
+   - 仍需从“按角色/教师姓名推断”升级到组织成员、班级、校区、监护人关系等显式数据授权模型。
 
-5. **生产化财务与课酬**
+7. **生产化财务与课酬**
    - 已增加财务科目配置、锁账、对账、批量课酬审核、异常退款和导出。
+   - 仍需真实支付渠道、发票号码规则、平台对账回单和财务导出格式验收。
 
-6. **部署与发布**
-   - 将当前本地工作树提交并重新部署到远端环境。
-   - 远端执行 migration 0006、health、Hermes status、RAG smoke、完整 e2e 或等价生产 smoke。
+8. **API 文档与交付材料**
+   - `main.ts` 内手写 OpenAPI 路由表落后于控制器实际能力，财务/MCP/知识库等接口文档不完整。
+   - README、CLAUDE 与审计文件里的测试数量、迁移版本、MCP 工具数量需要保持同步，避免交付验收口径漂移。
 
 ## 当前可交付判断
 

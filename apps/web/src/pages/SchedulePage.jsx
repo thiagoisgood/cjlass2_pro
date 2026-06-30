@@ -2,6 +2,8 @@ import React from "react";
 import { Plus, CalendarDays, Route, CheckCircle2, BellRing, MessageCircle, XCircle } from "lucide-react";
 import { PageHeader, EmptyState } from "../components/Common.jsx";
 import { CalendarGrid } from "../components/CalendarGrid.jsx";
+import { Button } from "../components/ui/Button.jsx";
+import { Badge } from "../components/ui/Badge.jsx";
 import { api } from "../api.js";
 
 function currency(value) {
@@ -38,25 +40,27 @@ export function SchedulePage({
       <div className="schedule-layout">
         <div className="calendar-panel">
           <div className="toolbar-row">
-            <button className="field-button small" type="button" onClick={() => setModal("lesson")}><Plus size={15} />课程</button>
-            <button
-              className="field-button small"
+            <Button variant="field" size="small" type="button" onClick={() => setModal("lesson")}><Plus size={15} />课程</Button>
+            <Button
+              variant="field"
+              size="small"
               type="button"
               disabled={!selectedLesson}
               onClick={() => selectedLesson && runMutation(() => api.markAttendance(selectedLesson.id, "已到课"), "已完成点名和课消")}
             >
               <CheckCircle2 size={15} />点名
-            </button>
-            <button
-              className="field-button small"
+            </Button>
+            <Button
+              variant="field"
+              size="small"
               type="button"
               disabled={!selectedLesson}
               onClick={() => runCommand("web", "请为这节课生成课前提醒")}
             >
               <BellRing size={15} />提醒
-            </button>
+            </Button>
             <span className="spacer" />
-            <button className="secondary-button compact" type="button" onClick={() => setView("chat")}><MessageCircle size={15} />聊天确认</button>
+            <Button variant="secondary" size="compact" type="button" onClick={() => setView("chat")}><MessageCircle size={15} />聊天确认</Button>
           </div>
           <CalendarGrid lessons={lessons} selectedLessonId={selectedLessonId} onSelect={setSelectedLessonId} />
         </div>
@@ -68,7 +72,7 @@ export function SchedulePage({
                   <h2>{selectedLesson.title}</h2>
                   <p>{selectedLesson.studentName} · {selectedLesson.status}</p>
                 </div>
-                <span className={`status-pill ${selectedLesson.attendance === "已到课" ? "tone-green" : "tone-orange"}`}>{selectedLesson.attendance}</span>
+                <Badge tone={selectedLesson.attendance === "已到课" ? "green" : "orange"}>{selectedLesson.attendance}</Badge>
               </div>
               <dl className="info-list">
                 <div><dt>时间</dt><dd>{selectedLesson.date} {selectedLesson.start} - {selectedLesson.end}</dd></div>
@@ -92,8 +96,9 @@ export function SchedulePage({
               <strong>待确认调课</strong>
               <p>{selectedTask.title}</p>
               <div className="button-row">
-                <button
-                  className="primary-button compact"
+                <Button
+                  variant="primary"
+                  size="compact"
                   type="button"
                   onClick={() => {
                     setSelectedTaskId(selectedTask.id);
@@ -101,14 +106,15 @@ export function SchedulePage({
                   }}
                 >
                   确认执行
-                </button>
-                <button
-                  className="secondary-button compact"
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="compact"
                   type="button"
                   onClick={() => runMutation(() => api.cancelTask(selectedTask.id, selectedTask.expectedVersion), "调课任务已取消")}
                 >
                   取消
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}

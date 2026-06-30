@@ -126,11 +126,10 @@ npm run build
 # 运行所有测试
 npm run test
 
-# API 单元测试（49 个）
+# API 单元测试（54 个）
 npm run test -w @cjlass2/api
 
 # 前端 E2E 测试（8 个，Playwright 会启动隔离 API/Web 服务）
-npm run dev -w @cjlass2/web
 npm run test:e2e -w @cjlass2/web
 ```
 

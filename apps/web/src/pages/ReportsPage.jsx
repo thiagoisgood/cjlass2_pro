@@ -1,7 +1,8 @@
 import React from "react";
 import { Download, History, CircleDollarSign, ListChecks, Users, CheckCircle2, BarChart3, Receipt, Database } from "lucide-react";
-import { PageHeader, Panel } from "../components/Common.jsx";
+import { PageHeader, Panel, MetricCard } from "../components/Common.jsx";
 import { LineChart } from "../components/LineChart.jsx";
+import { Button } from "../components/ui/Button.jsx";
 
 function currency(value) {
   return `¥${Number(value || 0).toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;
@@ -148,45 +149,23 @@ export function ReportsPage({ snapshot, dashboard, reports, ledgerSummaries, mon
               <td>课程数</td>
               <td>{lessons.length}</td>
               <td>/lessons</td>
-              <td><button className="link-button" type="button" onClick={() => setView("schedule")}>查看</button></td>
+              <td><Button variant="link" type="button" onClick={() => setView("schedule")}>查看</Button></td>
             </tr>
             <tr>
               <td>学员数</td>
               <td>{students.length}</td>
               <td>/students</td>
-              <td><button className="link-button" type="button" onClick={() => setView("students")}>查看</button></td>
+              <td><Button variant="link" type="button" onClick={() => setView("students")}>查看</Button></td>
             </tr>
             <tr>
               <td>待办数</td>
               <td>{dashboard?.pendingReschedules ?? 0}</td>
               <td>/business-tasks</td>
-              <td><button className="link-button" type="button" onClick={() => setView("chat")}>处理</button></td>
+              <td><Button variant="link" type="button" onClick={() => setView("chat")}>处理</Button></td>
             </tr>
           </tbody>
         </table>
       </Panel>
     </section>
-  );
-}
-
-const toneClass = {
-  blue: "tone-blue",
-  green: "tone-green",
-  orange: "tone-orange",
-  purple: "tone-purple",
-  red: "tone-red",
-  gray: "tone-gray",
-};
-
-function MetricCard({ icon: Icon, tone, label, value, helper }) {
-  return (
-    <div className="metric-card">
-      <span className={`metric-icon ${toneClass[tone] || "tone-gray"}`}><Icon size={20} /></span>
-      <span className="metric-copy">
-        <small>{label}</small>
-        <strong>{value}</strong>
-        <em>{helper}</em>
-      </span>
-    </div>
   );
 }

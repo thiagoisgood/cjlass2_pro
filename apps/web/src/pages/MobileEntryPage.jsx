@@ -1,6 +1,7 @@
 import React from "react";
 import { RefreshCcw, Download, Globe2, TabletSmartphone } from "lucide-react";
 import { PageHeader, Panel, MiniStat, PhoneFrame, TeacherPhone, ParentPhone } from "../components/Common.jsx";
+import { Button } from "../components/ui/Button.jsx";
 
 export function MobileEntryPage({
   snapshot,
@@ -44,8 +45,8 @@ export function MobileEntryPage({
               <MiniStat label="逾期" value={dashboard?.overdueOrders ?? 0} />
             </div>
             <div className="button-row">
-              <button className="primary-button compact" type="button" onClick={() => setView("dashboard")}>打开工作台</button>
-              <button className="secondary-button compact" type="button" onClick={() => setView("notifications")}>处理通知</button>
+              <Button variant="primary" size="compact" type="button" onClick={() => setView("dashboard")}>打开工作台</Button>
+              <Button variant="secondary" size="compact" type="button" onClick={() => setView("notifications")}>处理通知</Button>
             </div>
           </div>
         </Panel>

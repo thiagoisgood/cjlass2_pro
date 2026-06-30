@@ -1,6 +1,7 @@
 import React from "react";
 import { RefreshCcw, Download, ShieldCheck, Database, Users, BarChart3, Route, Globe2, CheckCircle2, WifiOff, BookOpen, Bot, MessageCircle, History } from "lucide-react";
 import { PageHeader, Panel, SettingRow } from "../components/Common.jsx";
+import { Button } from "../components/ui/Button.jsx";
 import { api } from "../api.js";
 
 export function SettingsPage({ snapshot, dashboard, refreshAll, openExport, runMutation, setView }) {
@@ -27,8 +28,8 @@ export function SettingsPage({ snapshot, dashboard, refreshAll, openExport, runM
             <SettingRow title="RBAC 范围" text="admin scopes: *；所有写操作进入审计流水" icon={ShieldCheck} />
           </div>
           <div className="button-row">
-            <button className="secondary-button compact" type="button" onClick={() => setView("reports")}><BarChart3 size={15} />查看经营报表</button>
-            <button className="secondary-button compact" type="button" onClick={() => setView("chat")}><Route size={15} />查看待确认任务</button>
+            <Button variant="secondary" size="compact" type="button" onClick={() => setView("reports")}><BarChart3 size={15} />查看经营报表</Button>
+            <Button variant="secondary" size="compact" type="button" onClick={() => setView("chat")}><Route size={15} />查看待确认任务</Button>
           </div>
         </Panel>
         <Panel title="渠道网关" icon={Globe2}>
@@ -46,7 +47,7 @@ export function SettingsPage({ snapshot, dashboard, refreshAll, openExport, runM
               <div style={{ color: "var(--muted)", padding: "8px" }}>暂无渠道配置</div>
             )}
           </div>
-          <button className="secondary-button compact" type="button" onClick={refreshAll}><RefreshCcw size={15} />重新检测连接</button>
+          <Button variant="secondary" size="compact" type="button" onClick={refreshAll}><RefreshCcw size={15} />重新检测连接</Button>
         </Panel>
         <Panel title="RAG 知识库" icon={BookOpen}>
           <div className="setting-list">
@@ -58,8 +59,8 @@ export function SettingsPage({ snapshot, dashboard, refreshAll, openExport, runM
                     <strong>{doc.title}</strong>
                     <p>{doc.scope} · {doc.status} · {doc.sourceCount ?? 0} 个片段 · {doc.parser || "seed"}{doc.expiresAt ? ` · 有效至 ${doc.expiresAt}` : ""}</p>
                     <div className="inline-actions">
-                      <button className="link-button" type="button" onClick={() => runMutation(() => api.reindexKnowledgeDoc(doc.id), "知识库向量索引已重建")}>重建索引</button>
-                      {doc.status === "生效中" ? <button className="link-button danger-link" type="button" onClick={() => runMutation(() => api.invalidateKnowledgeDoc(doc.id, "前台手动失效"), "知识文档已标记失效")}>标记失效</button> : null}
+                      <Button variant="link" type="button" onClick={() => runMutation(() => api.reindexKnowledgeDoc(doc.id), "知识库向量索引已重建")}>重建索引</Button>
+                      {doc.status === "生效中" ? <Button variant="link" tone="danger" type="button" onClick={() => runMutation(() => api.invalidateKnowledgeDoc(doc.id, "前台手动失效"), "知识文档已标记失效")}>标记失效</Button> : null}
                     </div>
                   </div>
                 </div>
@@ -68,8 +69,9 @@ export function SettingsPage({ snapshot, dashboard, refreshAll, openExport, runM
               <div style={{ color: "var(--muted)", padding: "8px" }}>暂无知识文档</div>
             )}
           </div>
-          <button
-            className="secondary-button compact"
+          <Button
+            variant="secondary"
+            size="compact"
             type="button"
             onClick={() =>
               runMutation(
@@ -86,7 +88,7 @@ export function SettingsPage({ snapshot, dashboard, refreshAll, openExport, runM
             }
           >
             <Database size={15} />上传制度样本
-          </button>
+          </Button>
         </Panel>
         <Panel title="Agent Gateway" icon={Bot}>
           <div className="setting-list">
@@ -99,7 +101,7 @@ export function SettingsPage({ snapshot, dashboard, refreshAll, openExport, runM
             )}
             <SettingRow title="今日待办" text={`${dashboard?.pendingReschedules ?? 0} 个 Proposal 等待人工确认`} icon={Route} />
           </div>
-          <button className="secondary-button compact" type="button" onClick={() => setView("chat")}><MessageCircle size={15} />打开 Agent 入口</button>
+          <Button variant="secondary" size="compact" type="button" onClick={() => setView("chat")}><MessageCircle size={15} />打开 Agent 入口</Button>
         </Panel>
       </div>
       <Panel title="审计流水" icon={History}>

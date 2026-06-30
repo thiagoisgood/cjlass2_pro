@@ -14,6 +14,7 @@ import { ReportsPage } from "./pages/ReportsPage.jsx";
 import { SettingsPage } from "./pages/SettingsPage.jsx";
 import { MobileEntryPage } from "./pages/MobileEntryPage.jsx";
 import { ChatPage } from "./pages/ChatPage.jsx";
+import { Button } from "./components/ui/Button.jsx";
 
 const UI_VIEW_KEY = "cjlass2-ui-last-view";
 
@@ -368,9 +369,9 @@ function LoginScreen({ error, busy, onSubmit }) {
           <input name="password" type="password" autoComplete="current-password" required />
         </label>
         {error ? <p className="login-error">{error}</p> : null}
-        <button className="primary-button" type="submit" disabled={busy}>
+        <Button variant="primary" type="submit" disabled={busy}>
           <ShieldCheck size={16} /> {busy ? "正在登录" : "登录"}
-        </button>
+        </Button>
       </form>
     </div>
   );
@@ -395,9 +396,9 @@ function ApiError({ error, onRetry }) {
         <Database size={34} style={{ color: "var(--red)" }} />
         <strong>Core API 未连接</strong>
         <p>{error || "请启动 NestJS API 服务后重试。"}</p>
-        <button className="primary-button" type="button" onClick={onRetry}>
+        <Button variant="primary" type="button" onClick={onRetry}>
           <RefreshCcw size={16} /> 重新连接
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import React from "react";
 import { Route, Receipt, CircleDollarSign, SquarePen, Bot, Send, CheckCircle2, AlertTriangle, Database, XCircle } from "lucide-react";
 import { PageHeader, Panel, EmptyState, SettingRow } from "../components/Common.jsx";
+import { Button } from "../components/ui/Button.jsx";
 import { api } from "../api.js";
 
 export function ChatPage({
@@ -115,15 +116,15 @@ export function ChatPage({
                 {(selectedTask.effects || []).map((effect) => <li key={effect}>{effect}</li>)}
               </ul>
               <div className="button-row">
-                <button className="primary-button" type="button" disabled={selectedTask.status !== "等待确认"} onClick={() => runMutation(() => api.confirmTask(selectedTask.id, selectedTask.expectedVersion), "业务任务已确认执行")}>
+                <Button variant="primary" type="button" disabled={selectedTask.status !== "等待确认"} onClick={() => runMutation(() => api.confirmTask(selectedTask.id, selectedTask.expectedVersion), "业务任务已确认执行")}>
                   <CheckCircle2 size={16} /> 确认执行
-                </button>
-                <button className="secondary-button" type="button" disabled={selectedTask.status !== "等待确认"} onClick={() => runMutation(() => api.cancelTask(selectedTask.id, selectedTask.expectedVersion), "业务任务已取消")}>
+                </Button>
+                <Button variant="secondary" type="button" disabled={selectedTask.status !== "等待确认"} onClick={() => runMutation(() => api.cancelTask(selectedTask.id, selectedTask.expectedVersion), "业务任务已取消")}>
                   <XCircle size={16} /> 取消任务
-                </button>
-                <button className="secondary-button" type="button" onClick={() => setModal("proposal")}>
+                </Button>
+                <Button variant="secondary" type="button" onClick={() => setModal("proposal")}>
                   <SquarePen size={16} /> 修改内容
-                </button>
+                </Button>
               </div>
             </div>
           ) : (

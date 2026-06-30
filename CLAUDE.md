@@ -18,11 +18,10 @@ npm run build
 # Run all tests
 npm run test
 
-# API tests only (46 tests)
+# API tests only (54 tests)
 npm run test -w @cjlass2/api
 
-# Frontend Playwright tests (7 tests, requires dev server)
-npm run dev -w @cjlass2/web  # Start server first
+# Frontend Playwright tests (8 tests; starts isolated API/Web server)
 npm run test:e2e -w @cjlass2/web
 
 # Lint (TypeScript type checking)
@@ -129,26 +128,26 @@ Tables: `lesson_ledger_entries`, `payment_ledger_entries`
 
 ### Agent Gateway (MCP Tools)
 
-The AgentGateway exposes 15 MCP (Model Context Protocol) tools for AI integration:
+The AgentGateway exposes 16 MCP (Model Context Protocol) tools for AI integration:
 
 **Query tools** - Read operations
 ```typescript
-student_search, schedule_query, teacher_availability, package_get_balance
+student_search, student_get_profile, schedule_query, package_get_balance, finance_get_summary, knowledge_search
 ```
 
 **Proposal tools** - Preview without executing
 ```typescript
-schedule_propose, schedule_check_conflicts, refund_preview
+schedule_propose, schedule_check_conflicts
 ```
 
 **Execute tools** - Write operations
 ```typescript
-schedule_commit, attendance_mark, notification_send
+schedule_commit, attendance_mark, notification_draft, notification_send, invoice_issue, payroll_generate
 ```
 
 **High-risk tools** - Require approval flow
 ```typescript
-refund_request, lesson_ledger_adjust, student_data_export
+refund_request, payroll_settle
 ```
 
 Key file: `apps/api/src/core/agent-gateway.service.ts`
@@ -200,13 +199,13 @@ Core tables (with RLS enabled):
 Migrations: `infra/postgres/migrations/000X_*.sql`
 - Automatically run on API startup
 - Checksum-validated to prevent tampering
-- Current version: 3 (agent_tool_calls_and_approvals)
+- Current version: 6 (finance_controls_and_data_scope)
 
 ## Testing
 
 ### API Tests (`apps/api/test/core.service.test.ts`)
 
-46 tests covering:
+54 tests covering:
 - Business flows (create student → order → schedule → attendance → payment)
 - Ledger integrity (append-only, reversals)
 - Idempotency and version conflicts

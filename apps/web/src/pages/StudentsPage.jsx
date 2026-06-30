@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus, Receipt, BellRing, History, MessageCircle, Send, CalendarDays } from "lucide-react";
 import { PageHeader, StudentStat, Panel, EmptyState } from "../components/Common.jsx";
+import { Button } from "../components/ui/Button.jsx";
 import { api } from "../api.js";
 
 function currency(value) {
@@ -104,8 +105,8 @@ export function StudentsPage({
           </div>
 
           <div className="button-row">
-            <button
-              className="primary-button"
+            <Button
+              variant="primary"
               type="button"
               onClick={() =>
                 runMutation(
@@ -122,9 +123,9 @@ export function StudentsPage({
               }
             >
               <Send size={16} /> 生成课后反馈
-            </button>
-            <button className="secondary-button" type="button" onClick={() => setModal("lesson")}><CalendarDays size={16} /> 排一节课</button>
-            <button className="secondary-button" type="button" onClick={() => setModal("order")}><Receipt size={16} /> 创建续费订单</button>
+            </Button>
+            <Button variant="secondary" type="button" onClick={() => setModal("lesson")}><CalendarDays size={16} /> 排一节课</Button>
+            <Button variant="secondary" type="button" onClick={() => setModal("order")}><Receipt size={16} /> 创建续费订单</Button>
           </div>
         </>
       ) : (
