@@ -27,6 +27,9 @@ npm run test:e2e -w @cjlass2/web
 # Lint (TypeScript type checking)
 npm run lint
 
+# Lightweight release checks (OpenAPI coverage, frontend external deps, prod env in strict mode)
+npm run ops:release-check
+
 # Development servers
 npm run dev -w @cjlass2/api   # API on port 3001
 npm run dev -w @cjlass2/web   # Web on port 5173
@@ -261,6 +264,10 @@ REDIS_URL=redis://localhost:6379
 # Authentication
 API_AUTH_TOKEN=your-api-token
 AUTH_SESSION_SECRET=your-session-secret
+WECOM_CALLBACK_SECRET=your-wecom-callback-secret
+WEBHOOK_SECRET=your-github-webhook-secret
+CORS_ORIGIN=https://your-domain
+SEED_ADMIN_PASSWORD=change-the-default
 
 # Notification channels (optional)
 WECOM_WEBHOOK_URL=https://example.com/wecom-webhook
@@ -272,8 +279,25 @@ NOTIFICATION_WEBHOOK_URL=https://example.com/generic-webhook
 
 # Agent
 HERMES_AGENT_URL=http://localhost:8080  # Optional
-NOTIFICATION_PROVIDER_MODE=mock  # For testing only
+HERMES_AGENT_API_KEY=your-key
+NOTIFICATION_PROVIDER_MODE=mock  # For testing only; forbidden in production
+
+# Production release gate evidence
+RELEASE_CHECK_PROFILE=production
+OBJECT_STORAGE_URI=s3://cjlass2-prod-backups/postgres
+WAL_ARCHIVE_URI=s3://cjlass2-prod-backups/wal
+RESTORE_DRILL_EVIDENCE=s3://cjlass2-prod-backups/drills/latest.json
+ACCESS_SCOPE_MODEL_EVIDENCE=docs/operations/access-scope-prod.md
+PAYMENT_CHANNEL_PROVIDER=wechat-pay
+INVOICE_NUMBER_RULE=CN-FAPIAO-YYYYMMDD-SEQ
+FINANCE_ACCEPTANCE_EVIDENCE=docs/operations/finance-acceptance.md
+WEBHOOK_PORT=127.0.0.1:9000
+WEBHOOK_ACCESS_CONTROL_EVIDENCE=infra/caddy/Caddyfile
 ```
+
+Production startup fails fast if required secrets, database URL, explicit CORS origin, WeCom callback secret, or a non-default admin password/hash are missing.
+
+Use `npm run ops:release-check` for local release hygiene, and `RELEASE_CHECK_STRICT=true RELEASE_CHECK_PROFILE=production npm run ops:release-check` before production deployment. The deploy script also runs the read-only `npm run ops:production-smoke` check after container health checks.
 
 ## Development Workflow
 

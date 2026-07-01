@@ -5,20 +5,23 @@
 
 import express from 'express';
 import crypto from 'crypto';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { sendNotification } from './notify.js';
 import { shouldDeploy } from './conditions.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 9000;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const PROJECT_DIR = process.env.PROJECT_DIR || '/app';
 const LOG_DIR = process.env.LOG_DIR || '/app/logs/deploy';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+if (IS_PRODUCTION && !WEBHOOK_SECRET) {
+  console.error('❌ NODE_ENV=production 时必须设置 WEBHOOK_SECRET，拒绝启动自动部署服务');
+  process.exit(1);
+}
 
 // 确保日志目录存在
 if (!fs.existsSync(LOG_DIR)) {
@@ -31,19 +34,22 @@ if (!fs.existsSync(LOG_DIR)) {
 function verifySignature(payload, signature) {
   if (!WEBHOOK_SECRET) {
     console.warn('⚠️ WEBHOOK_SECRET 未设置，跳过签名验证');
-    return true;
+    return !IS_PRODUCTION;
   }
 
-  if (!signature) {
+  if (!signature || Array.isArray(signature)) {
     return false;
   }
 
   const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
   const digest = 'sha256=' + hmac.update(payload).digest('hex');
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(digest)
-  );
+  return safeEqual(signature, digest);
+}
+
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left));
+  const rightBuffer = Buffer.from(String(right));
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 /**

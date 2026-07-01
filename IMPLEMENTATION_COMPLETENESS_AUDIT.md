@@ -10,13 +10,14 @@
 
 - **内部可演示 MVP：约 95%**。Web/API/PostgreSQL/Redis/RAG/财务/课酬/MCP/完整浏览器业务流均有本地代码和测试证据。
 - **需求文档第一阶段 MVP：约 88%-92%**。第一阶段核心业务、审计、RAG、MCP、备份恢复脚本已基本闭环；剩余主要是外部真实渠道、真实 Hermes 编排和更细的数据范围权限。
-- **生产上线准备度：约 74%-80%**。已有备份恢复脚本、密钥轮换、登录审计、恢复演练脚本和本地验证证据；仍需在真实生产 PostgreSQL 16 + pgvector、对象存储、WAL、真实渠道凭据和远端环境上完成演练。
+- **生产上线准备度：约 82%-86%**。已有备份恢复脚本、密钥轮换、登录审计、恢复演练脚本、本地验证证据、生产配置硬校验、Webhook 强签名、production profile 发布门禁和远端只读 smoke；仍需在真实生产 PostgreSQL 16 + pgvector、对象存储、WAL、真实渠道凭据和远端环境上完成演练。
 - **最终产品完成度：约 62%-68%**。最终产品要求多端、完整渠道网关、复杂 Agent/Hermes、多角色数据权限、深度报表和运营体验，目前仍是模块化单体 MVP。
 
 重要说明：
 
 - 当前审计基于**本地当前工作树**。存在未提交变更，且未重新验证远端 `47.100.87.41` 是否已部署这些最新本地改动。
 - 2026-06-30 本地验证通过：`npm run build`、`npm run lint`、`npm run test -w @cjlass2/api`、`npm run test:e2e -w @cjlass2/web`、`docker compose config --quiet`。
+- 本轮按“先不进行复杂测试”要求只新增并运行轻量发布检查：`npm run ops:release-check`，以及带占位生产 env 的 `RELEASE_CHECK_STRICT=true RELEASE_CHECK_PROFILE=production npm run ops:release-check`。未重跑完整 E2E、远端部署、pgvector 恢复演练或压力测试。
 - API 单测当前为 **54 个**，Web Playwright 当前为 **8 个**。
 - 当前本机 Node 为 `v18.20.7`，低于项目 `package.json` 声明的 `engines.node >=20`；发布流水线和服务器运行环境需固定 Node 20+。
 
@@ -29,6 +30,9 @@
 | `npm run test -w @cjlass2/api` | 通过，API `54` 个 node:test 单测全部通过。 |
 | `npm run test:e2e -w @cjlass2/web` | 首轮发现报表页 `MetricCard` 缺失导入导致完整业务流崩溃；已修复 `apps/web/src/pages/ReportsPage.jsx` 后重跑通过，Playwright `8` 项通过。 |
 | `docker compose config --quiet` | 通过，compose 配置可解析；尚未在本轮重建/重启远端生产容器。 |
+| `npm run ops:release-check` | 通过；检查 OpenAPI 覆盖控制器路由、前端无 Google Fonts 外链、生产 env strict 模式规则。当前仅警告本机 Node `18.20.7` 低于 `>=20`。 |
+| `RELEASE_CHECK_STRICT=true RELEASE_CHECK_PROFILE=production npm run ops:release-check` | 使用占位生产 env 验证通过；production profile 会拦截缺失 Hermes/embedding、渠道 webhook、对象存储/WAL/恢复演练证据、权限模型证据、真实支付/发票/财务验收证据和 Webhook 暴露边界。 |
+| `node scripts/ops/production-smoke.mjs` | 缺少 `PRODUCTION_BASE_URL` 时按预期拒绝运行；脚本已加入，远端部署后会只读检查 health/databaseMode、Node 20+、OpenAPI、session、MCP、Hermes、RAG 和渠道列表。 |
 | 财务与权限 schema | 迁移版本已到 `0006_finance_controls_and_data_scope.sql`，`POSTGRES_SCHEMA_VERSION = 6`。 |
 | RAG 行为 | 单测覆盖上传解析、embedding、本地向量降级、搜索、失效过滤和删除。 |
 | 完整浏览器业务流 | 覆盖登录、新增学员、创建订单、排课、点名、收款、通知、报表、审计。 |
@@ -72,6 +76,15 @@
    - README/CLAUDE 已更新为 16 个 MCP 工具、迁移版本 6、API 单测 54、Web e2e 8。
    - 本轮修复了 UI 组件整理后的报表页运行时导入缺口，完整浏览器业务流恢复通过。
 
+6. **本轮高优先级发布硬化**
+   - API `NODE_ENV=production` 下启动前强制校验 `DATABASE_URL`、`CORS_ORIGIN`、`API_AUTH_TOKEN`、`AUTH_SESSION_SECRET`、`WECOM_CALLBACK_SECRET`、非默认管理员密码，并禁止 `NOTIFICATION_PROVIDER_MODE=mock`。
+   - `/health` 增加 runtime 摘要，部署脚本会验证 API 运行在 PostgreSQL database mode。
+   - Webhook 服务在生产环境缺少 `WEBHOOK_SECRET` 时拒绝启动，签名比较改为长度安全的 constant-time 检查。
+   - 前端移除 Google Fonts 外链，避免生产网络外部阻塞依赖。
+   - OpenAPI 路由表补齐财务、课酬、MCP、Hermes 状态等控制器端点，并新增 `ops:release-check` 防止后续漏注册。
+   - 新增 `RELEASE_CHECK_PROFILE=production`，把真实 Hermes/embedding、真实渠道、对象存储/WAL、恢复演练证据、权限模型证据、财务生产验收和 Webhook 受控暴露边界纳入发布阻断。
+   - 新增 `ops:production-smoke`，部署后只读验证远端 health/databaseMode、OpenAPI、session、MCP、Hermes、RAG 搜索和渠道列表；`deploy.sh` 已接入该 smoke。
+
 ## 需求矩阵
 
 | 需求模块 | 当前状态 | 完成度 | 证据与主要缺口 |
@@ -85,7 +98,7 @@
 | 教师课酬 | 基本完成 | 78% | 课酬规则、生成、确认、结算、正式分录和前端操作已实现。仍需更复杂规则、批量审核、导出和异常处理。 |
 | 通知 | 部分完成 | 76% | 草稿、发送、预约、失败、重试、Redis queue、MCP 工具可用。真实渠道凭据、送达回执和模板审核未接完。 |
 | 报表 | 部分完成 | 64% | 收入、课消、到课率、课酬、账本核对可用。缺更多经营分析、钻取、SQL 读模型和导出格式。 |
-| Auth/RBAC/Tenant | 部分完成 | 72% | Bearer/session/RBAC/RLS、密钥轮换窗口、登录审计可用。缺完整组织成员、班级/教师/财务数据范围权限。 |
+| Auth/RBAC/Tenant | 部分完成 | 76% | Bearer/session/RBAC/RLS、密钥轮换窗口、登录审计、生产密钥硬校验可用。缺完整组织成员、班级/教师/财务数据范围权限。 |
 | 审计、幂等、可靠性 | 基本完成 | 80% | 核心 mutation 走幂等，关键业务写审计，登录审计已补。仍需更多异常路径和批处理任务审计。 |
 | PostgreSQL/Redis 基础设施 | 基本完成 | 82% | migration 1..6、RLS、Redis queue、pgvector schema 已有。需在生产 PG16+pgvector 上重跑恢复演练。 |
 | MCP 工具 | 基本完成 | 86% | 16 个工具，覆盖查询、方案、执行、高风险财务/课酬。缺更严格 JSON Schema、权限矩阵和真实 Agent 多轮编排。 |
@@ -94,7 +107,7 @@
 | RAG | 基本完成 | 82% | embedding provider、pgvector 排序、上传解析、有效期/失效过滤、source 引用均有实现和测试。需接真实 embedding key 并用生产 pgvector 数据量压测。 |
 | Channel Gateway / 聊天渠道 | 部分完成 | 58% | 企业微信回调、签名、去重、账号绑定、卡片确认最小闭环。缺真实企微/飞书/钉钉全协议、AES、回执和运维配置页。 |
 | 备份与恢复 | 部分完成 | 70% | 脚本、manifest、对象存储入口、runbook、本地 pg_dump/restore drill 已有。缺生产 WAL 配置落地、对象存储真实账号演练、PG16+pgvector 完整恢复演练。 |
-| 测试覆盖 | 较好 | 84% | API 54 单测 + Web 8 Playwright 通过。缺真实外部渠道、真实 embedding provider、生产数据库恢复和压力/并发测试。 |
+| 测试覆盖 | 较好 | 85% | API 54 单测 + Web 8 Playwright 通过，轻量 release check 已加入。缺真实外部渠道、真实 embedding provider、生产数据库恢复和压力/并发测试。 |
 
 ## 验收标准对照
 
@@ -110,43 +123,40 @@
 ## 剩余高优先级事项
 
 1. **远端发布与当前变更落地**
-   - 当前工作树仍有多处未提交 Web UI 改动和新增 `apps/web/src/components/ui/` 组件；发布前需要提交、打包并部署到远端。
-   - 远端执行 migration 0006、health、Hermes status、RAG smoke、完整 e2e 或等价生产 smoke。
-   - 远端必须确认 API 运行在 PostgreSQL database mode，而不是内存/种子数据降级。
+   - 当前工作树仍有未提交变更；发布前需要提交、打包并部署到远端。
+   - `deploy.sh` 已接入 `RELEASE_CHECK_PROFILE=production` 和 `ops:production-smoke`，会在构建前阻断缺失生产证据，并在部署后验证 health/databaseMode、Hermes status、RAG smoke、MCP 和渠道只读接口。
+   - 仍需在远端实际执行 migration 0006/后续迁移、容器重建和生产 smoke；该步骤依赖远端凭据与部署窗口。
 
-2. **生产安全配置**
-   - 生产必须显式配置强 `API_AUTH_TOKEN`、`AUTH_SESSION_SECRET`、`WEBHOOK_SECRET`、`WECOM_CALLBACK_SECRET` 等密钥，不能依赖开发默认值或空值。
-   - Webhook 容器拥有 Docker socket 和项目目录写权限，必须只暴露在强签名、受控网络和可审计入口后。
-   - 当前前端引入 Google Fonts 外链；若面向国内生产网络，应改为本地字体或移除外部阻塞依赖。
+2. **真实外部集成**
+   - 已将缺失真实渠道配置纳入 production profile：至少一个 outbound webhook 必需，`REQUIRE_ALL_CHANNEL_WEBHOOKS=true` 时强制企业微信/微信/飞书/钉钉 webhook 全部存在。
+   - 仍需在真实平台账号中完成凭据配置、平台原生 AES/签名、送达回执、模板审核和失败告警验收。
 
-3. **真实外部集成**
-   - 配置并验证真实企业微信/微信 H5/飞书/钉钉凭据。
-   - 补平台原生 AES/签名、送达回执、模板审核和失败告警。
+3. **真实 Hermes / 大模型闭环**
+   - production profile 已强制 `HERMES_AGENT_URL`、`HERMES_AGENT_API_KEY`，并禁止 embedding 使用本地降级。
+   - 仍需连接真实 Hermes/OpenAI-compatible 服务并验收多轮追问、复杂槽位填充、歧义消解和审批上下文。
 
-4. **真实 Hermes / 大模型闭环**
-   - 接真实 Hermes Agent 或 OpenAI-compatible 服务。
-   - 增加多轮追问、复杂槽位填充、歧义消解和审批上下文。
+4. **生产恢复演练**
+   - production profile 已强制 `OBJECT_STORAGE_URI`、`WAL_ARCHIVE_URI` 和 `RESTORE_DRILL_EVIDENCE`，避免无恢复证据发布。
+   - 仍需在可拉取 `pgvector/pgvector:pg16` 或真实 PG16+pgvector 环境重跑完整 backup/restore drill，并做一次从 dump + WAL 的演练。
 
-5. **生产恢复演练**
-   - 在可拉取 `pgvector/pgvector:pg16` 或真实 PG16+pgvector 环境重跑完整 backup/restore drill。
-   - 配置 WAL 归档和对象存储真实 bucket，并做一次从 dump + WAL 的演练。
-
-6. **权限和数据范围**
+5. **权限和数据范围**
    - 已补教师/财务/助教/只读用户的数据范围权限。
    - `snapshot`、列表、报表、导出、知识库搜索和 MCP 查询工具均按角色裁剪。
    - 学生知识库和财务数据已加入二次过滤：学生知识限定管理员/关联教师/助教，财务知识限定管理员/财务。
-   - 仍需从“按角色/教师姓名推断”升级到组织成员、班级、校区、监护人关系等显式数据授权模型。
+   - production profile 已要求 `ACCESS_SCOPE_MODEL_EVIDENCE`，作为显式组织成员、班级、校区、监护人关系授权模型的发布证据。
+   - 仍需把当前“按角色/教师姓名推断”的本地裁剪升级为数据库级显式关系模型和对应 UI/迁移。
 
-7. **生产化财务与课酬**
+6. **生产化财务与课酬**
    - 已增加财务科目配置、锁账、对账、批量课酬审核、异常退款和导出。
-   - 仍需真实支付渠道、发票号码规则、平台对账回单和财务导出格式验收。
+   - production profile 已要求 `PAYMENT_CHANNEL_PROVIDER`、`INVOICE_NUMBER_RULE` 和 `FINANCE_ACCEPTANCE_EVIDENCE`。
+   - 仍需真实支付渠道、平台对账回单和财务导出格式验收落到生产账号/财务流程。
 
-8. **API 文档与交付材料**
-   - `main.ts` 内手写 OpenAPI 路由表落后于控制器实际能力，财务/MCP/知识库等接口文档不完整。
-   - README、CLAUDE 与审计文件里的测试数量、迁移版本、MCP 工具数量需要保持同步，避免交付验收口径漂移。
+7. **发布运维边界**
+   - `docker-compose.yml` 默认将 Webhook 端口绑定到 `127.0.0.1:9000`，production profile 会阻断非 loopback 绑定并要求 `WEBHOOK_ACCESS_CONTROL_EVIDENCE`。
+   - 发布服务器需要固定 Node 20+；Dockerfile 使用 Node 20/22，当前本机 Node 18 仅适合本地轻量验证。
 
 ## 当前可交付判断
 
 当前本地项目已经可以作为 **第一阶段 MVP 验收版本** 使用：核心业务闭环、RAG 正式化、财务/课酬、MCP、浏览器 e2e、备份恢复脚本均已具备实质实现和测试证据。
 
-若要作为正式生产系统长期运行，还需要完成真实渠道凭据、真实 Hermes/embedding 配置、生产 PG16+pgvector 恢复演练、对象存储/WAL 落地、细粒度权限和远端重新部署验证。
+若要作为正式生产系统长期运行，还需要完成真实渠道凭据、真实 Hermes/embedding 配置、生产 PG16+pgvector 恢复演练、对象存储/WAL 落地、细粒度权限、受控发布入口和远端重新部署验证。

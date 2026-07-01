@@ -3,8 +3,11 @@ import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AppModule } from "./app.module.js";
+import { assertProductionConfig } from "./core/runtime-config.js";
 
 async function bootstrap() {
+  assertProductionConfig();
+
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
   app.setGlobalPrefix("api/v1");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -21,11 +24,11 @@ async function bootstrap() {
 
 function createOpenApiDocument() {
   const routes: Array<[string, "get" | "post" | "patch" | "delete"]> = [
-	    ["/api/v1/snapshot", "get"],
-	    ["/api/v1/health", "get"],
-	    ["/api/v1/dev/reset", "post"],
-	    ["/api/v1/auth/login", "post"],
-	    ["/api/v1/auth/session", "get"],
+    ["/api/v1/snapshot", "get"],
+    ["/api/v1/health", "get"],
+    ["/api/v1/dev/reset", "post"],
+    ["/api/v1/auth/login", "post"],
+    ["/api/v1/auth/session", "get"],
     ["/api/v1/dashboard", "get"],
     ["/api/v1/students", "get"],
     ["/api/v1/students", "post"],
@@ -43,9 +46,31 @@ function createOpenApiDocument() {
     ["/api/v1/orders", "get"],
     ["/api/v1/orders", "post"],
     ["/api/v1/payments", "post"],
+    ["/api/v1/invoices", "get"],
+    ["/api/v1/invoices/issue", "post"],
+    ["/api/v1/refunds", "get"],
+    ["/api/v1/refunds", "post"],
+    ["/api/v1/refunds/exceptional", "post"],
+    ["/api/v1/refunds/{id}/approve", "post"],
+    ["/api/v1/refunds/{id}/settle", "post"],
     ["/api/v1/payment-ledger", "get"],
     ["/api/v1/payment-ledger/summary", "get"],
     ["/api/v1/payment-ledger/{id}/reverse", "post"],
+    ["/api/v1/financial-ledger", "get"],
+    ["/api/v1/financial-ledger/summary", "get"],
+    ["/api/v1/financial-ledger/reconcile", "post"],
+    ["/api/v1/financial-accounts", "get"],
+    ["/api/v1/financial-accounts", "post"],
+    ["/api/v1/accounting-period-locks", "get"],
+    ["/api/v1/accounting-periods/{period}/lock", "post"],
+    ["/api/v1/reconciliation-runs", "get"],
+    ["/api/v1/payroll-rules", "get"],
+    ["/api/v1/payroll-rules", "post"],
+    ["/api/v1/payroll/generate", "post"],
+    ["/api/v1/payroll-records", "get"],
+    ["/api/v1/payroll-records/batch-confirm", "post"],
+    ["/api/v1/payroll-records/{id}/confirm", "post"],
+    ["/api/v1/payroll-records/{id}/settle", "post"],
     ["/api/v1/notifications", "get"],
     ["/api/v1/notifications", "post"],
     ["/api/v1/notifications/{id}", "patch"],
@@ -81,6 +106,12 @@ function createOpenApiDocument() {
     ["/api/v1/knowledge-docs/{id}/search", "post"],
     ["/api/v1/knowledge-search", "post"],
     ["/api/v1/agent-runs", "post"],
+    ["/api/v1/mcp/tools", "get"],
+    ["/api/v1/mcp/tools/{name}", "get"],
+    ["/api/v1/mcp/execute", "post"],
+    ["/api/v1/mcp/approvals", "get"],
+    ["/api/v1/mcp/approvals/{id}/decide", "post"],
+    ["/api/v1/agent/hermes-status", "get"],
     ["/api/v1/channel-integrations", "post"],
     ["/api/v1/channel-integrations/{id}", "patch"],
     ["/api/v1/channel-accounts", "get"],

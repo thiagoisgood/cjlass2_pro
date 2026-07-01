@@ -293,6 +293,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      <div className="immersive-background" />
       <Sidebar
         snapshot={snapshot}
         view={view}
@@ -331,8 +332,16 @@ function App() {
         {view === "reports" && <ReportsPage {...pageProps} />}
         {view === "settings" && <SettingsPage {...pageProps} refreshAll={refreshAll} />}
         {view === "mobile" && <MobileEntryPage {...pageProps} />}
-        {view === "chat" && <ChatPage {...pageProps} commandText={commandText} setCommandText={setCommandText} />}
       </main>
+      
+      {view === "chat" && (
+        <div className="agent-overlay-container">
+          <ChatPage {...pageProps} commandText={commandText} setCommandText={setCommandText} />
+          <button className="agent-close-btn" type="button" onClick={() => setView("dashboard")} title="关闭 Agent">
+            &times;
+          </button>
+        </div>
+      )}
       {modal ? (
         <FormModal
           type={modal}

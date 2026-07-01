@@ -131,6 +131,9 @@ npm run test -w @cjlass2/api
 
 # 前端 E2E 测试（8 个，Playwright 会启动隔离 API/Web 服务）
 npm run test:e2e -w @cjlass2/web
+
+# 轻量发布检查（不启动服务、不跑浏览器）
+npm run ops:release-check
 ```
 
 ### 测试覆盖
@@ -311,11 +314,15 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/cjlass2
 # Redis（可选，未配置时降级为内存队列）
 REDIS_URL=redis://localhost:6379
 
-# 认证
-API_AUTH_TOKEN=your-api-token          # API 访问令牌
+# 认证与生产安全
+API_AUTH_TOKEN=your-api-token          # API 访问令牌，生产至少 24 字符
 API_AUTH_TOKEN_PREVIOUS=old-token      # 轮换窗口内仍可接受的旧 API token，逗号分隔
-AUTH_SESSION_SECRET=your-secret        # Session 签名密钥
+AUTH_SESSION_SECRET=your-secret        # Session 签名密钥，生产至少 32 字符且不能等于 API_AUTH_TOKEN
 AUTH_SESSION_PREVIOUS_SECRETS=old-secret # 轮换窗口内仍可验签的旧 session secret，逗号分隔
+WECOM_CALLBACK_SECRET=your-callback-secret # 企业微信回调签名密钥，生产必需
+WEBHOOK_SECRET=your-github-webhook-secret # 自动部署 GitHub Webhook 签名密钥，生产必需
+SEED_ADMIN_PASSWORD=<change-me>        # 生产必须修改，或提供 SEED_ADMIN_PASSWORD_HASH
+CORS_ORIGIN=https://<your-domain>      # 生产必需，避免开放 CORS
 
 # RAG / Embedding
 EMBEDDING_PROVIDER=openai              # local | openai | openai-compatible
@@ -336,8 +343,37 @@ NOTIFICATION_WEBHOOK_URL=https://example.com/generic-webhook # 兜底通用 webh
 HERMES_AGENT_URL=http://localhost:8080 # Hermes Agent 地址
 HERMES_AGENT_API_KEY=your-key          # Hermes/OpenAI-compatible API Key
 HERMES_MODEL=hermes                    # 可选；未设置时使用 Hermes 环境默认模型
-NOTIFICATION_PROVIDER_MODE=mock        # 仅测试模式；生产不要设置为 mock
+NOTIFICATION_PROVIDER_MODE=mock        # 仅测试模式；生产设置为 mock 会拒绝启动
+
+# 发布门禁证据（RELEASE_CHECK_PROFILE=production 时必需）
+RELEASE_CHECK_PROFILE=production
+OBJECT_STORAGE_URI=s3://cjlass2-prod-backups/postgres
+WAL_ARCHIVE_URI=s3://cjlass2-prod-backups/wal
+RESTORE_DRILL_EVIDENCE=s3://cjlass2-prod-backups/drills/latest.json
+ACCESS_SCOPE_MODEL_EVIDENCE=docs/operations/access-scope-prod.md
+PAYMENT_CHANNEL_PROVIDER=wechat-pay
+INVOICE_NUMBER_RULE=CN-FAPIAO-YYYYMMDD-SEQ
+FINANCE_ACCEPTANCE_EVIDENCE=docs/operations/finance-acceptance.md
+WEBHOOK_PORT=127.0.0.1:9000
+WEBHOOK_ACCESS_CONTROL_EVIDENCE=infra/caddy/Caddyfile
 ```
+
+`NODE_ENV=production` 时 API 会在启动阶段拒绝缺失或不安全的生产配置；Webhook 服务也会在生产环境强制要求 `WEBHOOK_SECRET`。
+
+## 发布检查与远端 smoke
+
+```bash
+# 本地轻量发布检查：OpenAPI 覆盖、前端外链字体、基础生产 env 规则
+npm run ops:release-check
+
+# 生产严格门禁：真实 Hermes/embedding、渠道、备份恢复、财务验收、Webhook 边界证据
+RELEASE_CHECK_STRICT=true RELEASE_CHECK_PROFILE=production npm run ops:release-check
+
+# 远端只读 smoke：health/databaseMode、OpenAPI、session、MCP、Hermes、RAG、渠道列表
+PRODUCTION_BASE_URL=https://cjlass.example API_AUTH_TOKEN=... npm run ops:production-smoke
+```
+
+部署脚本会自动执行 `RELEASE_CHECK_PROFILE=production` 和只读 smoke。详细门禁说明见 `docs/operations/release-readiness.md`。
 
 ## 数据库迁移
 
@@ -405,6 +441,7 @@ WAL 归档、对象存储保留策略和恢复演练步骤见 `docs/operations/b
 2. **Controller 层**：在 `core.controller.ts` 添加端点
 3. **OpenAPI**：在 `main.ts` 注册路由
 4. **测试**：在 `core.service.test.ts` 添加测试用例
+5. **发布检查**：运行 `npm run ops:release-check`，确保 OpenAPI 没有漏控制器路由
 
 ### 使用幂等性
 
@@ -442,6 +479,7 @@ this.registerTool({
 
 ```bash
 # 构建镜像
+npm run ops:release-check
 npm run build
 docker compose build
 
@@ -470,8 +508,12 @@ EDGE_HTTPS_PORT=443
 ```bash
 # 必需环境变量
 DATABASE_URL=postgresql://...
+CORS_ORIGIN=https://<your-domain>
 AUTH_SESSION_SECRET=<随机生成的强密钥>
 API_AUTH_TOKEN=<随机生成的强令牌>
+WECOM_CALLBACK_SECRET=<随机生成的回调密钥>
+WEBHOOK_SECRET=<GitHub Webhook 签名密钥>
+SEED_ADMIN_PASSWORD=<修改默认密码>
 
 # 推荐配置
 NODE_ENV=production
@@ -483,7 +525,7 @@ REDIS_URL=redis://...
 - ✅ 后端生产化：~95%
 - ✅ 前端真实化：~90%
 - ✅ 基础设施：~85%
-- ✅ 测试覆盖：49 API + 8 Playwright
+- ✅ 测试覆盖：54 API + 8 Playwright
 
 详见 [IMPLEMENTATION_COMPLETENESS_AUDIT.md](./IMPLEMENTATION_COMPLETENESS_AUDIT.md)
 

@@ -154,6 +154,7 @@ services:
       context: ./infra/webhook
     restart: unless-stopped
     environment:
+      NODE_ENV: production
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
       NOTIFICATION_PROVIDER: ${NOTIFICATION_PROVIDER:-}
       NOTIFICATION_WEBHOOK_URL: ${NOTIFICATION_WEBHOOK_URL:-}

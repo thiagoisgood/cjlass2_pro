@@ -34,6 +34,7 @@ import { JsonStateStore } from "./json-state.store.js";
 import { isNotificationChannelConfigured, NotificationProviderService } from "./notification-provider.service.js";
 import { NotificationQueueService, type NotificationQueueJob } from "./notification-queue.service.js";
 import { defaultRequestContext, type RequestContext } from "./request-context.js";
+import { runtimeStatus } from "./runtime-config.js";
 
 export interface MutationMeta {
   context?: RequestContext;
@@ -152,6 +153,7 @@ export class CoreService implements OnModuleInit, OnModuleDestroy {
       lessons: state.lessons.length,
       notifications: state.notifications.length,
       queue: this.notificationQueue.status(),
+      runtime: runtimeStatus(),
       checkedAt: nowText(),
     };
   }

@@ -22,6 +22,8 @@
     "ops:restore:drill": "node scripts/ops/restore-drill.mjs",
     "ops:rotate-secrets": "node scripts/ops/rotate-secrets.mjs",
     "ops:deploy-decision": "node scripts/ops/deploy-decision.mjs",
+    "ops:release-check": "node scripts/ops/release-readiness.mjs",
+    "ops:production-smoke": "node scripts/ops/production-smoke.mjs",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"
   },

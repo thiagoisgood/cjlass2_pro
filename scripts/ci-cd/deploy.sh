@@ -37,6 +37,37 @@ log_info "========================================="
 # 进入项目目录
 cd "${PROJECT_DIR}"
 
+# 从 .env 读取部署配置；docker compose 也会读取同一份文件。
+if [ -f "${PROJECT_DIR}/.env" ]; then
+    # shellcheck disable=SC1090
+    source "${PROJECT_DIR}/.env"
+fi
+
+require_env() {
+    local name=$1
+    local value=${!name:-}
+    if [ -z "${value}" ]; then
+        log_error "缺少必需生产环境变量: ${name}"
+        exit 1
+    fi
+}
+
+log_info "执行发布前生产配置检查..."
+require_env "API_AUTH_TOKEN"
+require_env "AUTH_SESSION_SECRET"
+require_env "WEBHOOK_SECRET"
+require_env "WECOM_CALLBACK_SECRET"
+
+if [ "${NOTIFICATION_PROVIDER_MODE:-}" = "mock" ]; then
+    log_error "生产部署禁止 NOTIFICATION_PROVIDER_MODE=mock"
+    exit 1
+fi
+
+if [ -z "${SEED_ADMIN_PASSWORD_HASH:-}" ] && [ "${SEED_ADMIN_PASSWORD:-ChangeMe123!}" = "ChangeMe123!" ]; then
+    log_error "生产部署必须修改 SEED_ADMIN_PASSWORD 或提供 SEED_ADMIN_PASSWORD_HASH"
+    exit 1
+fi
+
 # 检查 git 仓库
 if [ ! -d ".git" ]; then
     log_error "不是 git 仓库，无法执行 git pull"
@@ -67,6 +98,9 @@ log_info "新增 commits:"
 git log --oneline "${BEFORE_PULL}..${AFTER_PULL}" | head -5 | while read line; do
     echo "  ${line}"
 done
+
+log_info "执行发布门禁..."
+RELEASE_CHECK_STRICT=true RELEASE_CHECK_PROFILE="${RELEASE_CHECK_PROFILE:-production}" npm run ops:release-check
 
 # 重建并重启容器
 log_info "重建 Docker 镜像..."
@@ -109,14 +143,35 @@ if [ -f "${PROJECT_DIR}/.env" ]; then
     source "${PROJECT_DIR}/.env"
 fi
 
-API_PORT="${API_PORT:-3011}"
-WEB_PORT="${WEB_PORT:-5183}"
+API_PORT="${API_PORT:-3001}"
+WEB_PORT="${WEB_PORT:-5173}"
 API_PORT_NUMBER="${API_PORT##*:}"
 WEB_PORT_NUMBER="${WEB_PORT##*:}"
 
 # 健康检查各个服务
 check_service_health "API" "http://127.0.0.1:${API_PORT_NUMBER}/api/v1/health" || ALL_HEALTHY=false
 check_service_health "Web" "http://127.0.0.1:${WEB_PORT_NUMBER}" || ALL_HEALTHY=false
+
+check_api_database_mode() {
+    local url=$1
+    local body
+    body=$(curl -sf "${url}") || return 1
+    node -e "const h = JSON.parse(process.argv[1]); if (!h.databaseMode) process.exit(2); if (h.runtime && h.runtime.productionConfigReady === false) process.exit(3);" "${body}"
+}
+
+if check_api_database_mode "http://127.0.0.1:${API_PORT_NUMBER}/api/v1/health"; then
+    log_success "API 使用 PostgreSQL database mode，生产配置摘要正常"
+else
+    log_error "API 未运行在 PostgreSQL database mode，或生产配置摘要异常"
+    ALL_HEALTHY=false
+fi
+
+if PRODUCTION_BASE_URL="${PRODUCTION_BASE_URL:-http://127.0.0.1:${API_PORT_NUMBER}}" API_AUTH_TOKEN="${API_AUTH_TOKEN}" SMOKE_REQUIRE_HERMES="${SMOKE_REQUIRE_HERMES:-true}" npm run ops:production-smoke; then
+    log_success "生产只读 smoke 通过"
+else
+    log_error "生产只读 smoke 失败"
+    ALL_HEALTHY=false
+fi
 
 # 部署完成
 log_info "========================================="

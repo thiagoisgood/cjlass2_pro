@@ -62,11 +62,12 @@ export function ReportsPage({ snapshot, dashboard, reports, ledgerSummaries, mon
             {teacherPayroll.length ? (
               teacherPayroll.map((row) => (
                 <div className="progress-row" key={row.teacher}>
+                  <strong>{row.teacher}</strong>
                   <div>
-                    <strong>{row.teacher}</strong>
-                    <small>{row.lessons} 节课 · {currency(row.pay)}</small>
+                    <i style={{ width: `${Math.min(100, (row.lessons || 0) * 8)}%` }} />
                   </div>
-                  <i style={{ width: `${Math.min(100, (row.lessons || 0) * 8)}%` }} />
+                  <small>{row.lessons} 节课</small>
+                  <b>{currency(row.pay)}</b>
                 </div>
               ))
             ) : (
