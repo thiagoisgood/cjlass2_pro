@@ -1,0 +1,1357 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CJClass2 Agent-first v2 Demo</title>
+    <script>
+      if (new URLSearchParams(window.location.search).get("theme") === "light") {
+        document.documentElement.classList.add("theme-light");
+      }
+    </script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --stage-a: #070910;
+        --stage-b: #0d111b;
+        --app: rgba(9, 12, 19, 0.98);
+        --sidebar: #0b0e15;
+        --surface: #10141d;
+        --surface-2: #141a25;
+        --surface-3: #0c1018;
+        --line: #29303d;
+        --line-soft: #1d2430;
+        --text: #f5f7fb;
+        --muted: #9aa5b5;
+        --muted-2: #6d788a;
+        --agent: #4cc9f0;
+        --agent-soft: rgba(76, 201, 240, 0.12);
+        --blue: #5b8cff;
+        --green: #45d483;
+        --amber: #f4bd50;
+        --red: #ff6b6b;
+        --violet: #a98bff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #05070c;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+          sans-serif;
+        color: var(--text);
+      }
+
+      .stage {
+        position: relative;
+        width: 1440px;
+        height: 1024px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 76% 8%, rgba(76, 201, 240, 0.16), transparent 27%),
+          radial-gradient(circle at 38% 92%, rgba(91, 140, 255, 0.11), transparent 24%),
+          linear-gradient(180deg, var(--stage-b), var(--stage-a));
+      }
+
+      .app {
+        position: absolute;
+        inset: 34px;
+        display: grid;
+        grid-template-columns: 236px 1fr 378px;
+        grid-template-rows: 58px 76px 1fr;
+        border: 1px solid #202838;
+        background: var(--app);
+        box-shadow: 0 30px 110px rgba(0, 0, 0, 0.46);
+      }
+
+      .sidebar {
+        grid-row: 1 / 4;
+        padding: 20px 16px;
+        border-right: 1px solid var(--line-soft);
+        background: var(--sidebar);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px 17px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #e7fbff, #68d8f3 42%, #5b8cff);
+        color: #07111d;
+        font-size: 13px;
+        font-weight: 850;
+      }
+
+      .brand strong,
+      .panel-title,
+      .callout strong,
+      .queue-card strong,
+      .insight-title,
+      h1 {
+        letter-spacing: 0;
+      }
+
+      .brand strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .brand small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted-2);
+        font-size: 11px;
+      }
+
+      .nav-title {
+        margin: 19px 8px 9px;
+        color: var(--muted-2);
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 36px;
+        margin: 4px 0;
+        padding: 0 10px 0 11px;
+        border-radius: 7px;
+        color: #c8d0db;
+        font-size: 13px;
+      }
+
+      .nav-left {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted-2);
+      }
+
+      .nav-item.active {
+        background: #172231;
+        color: #ffffff;
+      }
+
+      .nav-item.agent {
+        border: 1px solid rgba(76, 201, 240, 0.28);
+        background: var(--agent-soft);
+        color: #dffaff;
+      }
+
+      .nav-item.agent .dot,
+      .agent-dot {
+        background: var(--agent);
+        box-shadow: 0 0 0 4px rgba(76, 201, 240, 0.16);
+      }
+
+      .count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: #202939;
+        color: #cbd5e1;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .sidebar-note {
+        margin-top: 23px;
+        padding: 14px;
+        border: 1px solid rgba(76, 201, 240, 0.22);
+        border-radius: 8px;
+        background: rgba(76, 201, 240, 0.07);
+      }
+
+      .sidebar-note b {
+        display: block;
+        color: #e9fbff;
+        font-size: 12px;
+      }
+
+      .sidebar-note p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .topbar {
+        grid-column: 2 / 4;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 22px;
+        border-bottom: 1px solid var(--line-soft);
+        background: rgba(12, 16, 24, 0.94);
+      }
+
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 492px;
+        height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #090d14;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .top-actions,
+      .status-grid,
+      .view-tabs,
+      .toolbar,
+      .button-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .chip,
+      .mode-chip,
+      .view-tab,
+      .tool {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--surface);
+        color: #cbd5e1;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .mode-chip {
+        border-color: rgba(76, 201, 240, 0.42);
+        background: rgba(76, 201, 240, 0.12);
+        color: #dffaff;
+      }
+
+      .chip.primary {
+        border-color: #4167c7;
+        background: #1b2d56;
+        color: #edf3ff;
+      }
+
+      .agent-strip {
+        grid-column: 2 / 4;
+        display: grid;
+        grid-template-columns: 1.22fr repeat(4, 0.64fr);
+        align-items: center;
+        gap: 14px;
+        padding: 14px 22px;
+        border-bottom: 1px solid var(--line-soft);
+        background: linear-gradient(90deg, rgba(76, 201, 240, 0.09), rgba(91, 140, 255, 0.06));
+      }
+
+      .agent-status {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+      }
+
+      .agent-mark {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 1px solid rgba(76, 201, 240, 0.48);
+        border-radius: 10px;
+        background: rgba(76, 201, 240, 0.13);
+        color: #dffaff;
+        font-size: 12px;
+        font-weight: 850;
+      }
+
+      .agent-status strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .agent-status small {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .strip-stat {
+        display: flex;
+        min-height: 48px;
+        flex-direction: column;
+        justify-content: center;
+        padding: 10px 14px;
+        border: 1px solid rgba(76, 201, 240, 0.18);
+        border-radius: 8px;
+        background: rgba(8, 12, 18, 0.35);
+      }
+
+      .strip-stat span {
+        display: block;
+        color: var(--muted-2);
+        font-size: 10px;
+      }
+
+      .strip-stat b {
+        display: block;
+        margin-top: 5px;
+        font-size: 13px;
+      }
+
+      .main {
+        grid-column: 2;
+        padding: 22px 22px 18px;
+        overflow: hidden;
+      }
+
+      .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      .kicker {
+        color: var(--agent);
+        font-size: 11px;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 5px 0 6px;
+        font-size: 27px;
+        line-height: 1.1;
+        font-weight: 780;
+      }
+
+      .head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 13px;
+        margin-bottom: 18px;
+      }
+
+      .metric {
+        min-height: 90px;
+        padding: 15px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted-2);
+        font-size: 12px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 23px;
+        font-weight: 800;
+      }
+
+      .metric small {
+        display: block;
+        margin-top: 6px;
+        color: var(--green);
+        font-size: 11px;
+      }
+
+      .metric.agent-metric {
+        border-color: rgba(76, 201, 240, 0.36);
+        background: linear-gradient(180deg, rgba(76, 201, 240, 0.12), rgba(76, 201, 240, 0.04));
+      }
+
+      .workspace {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface-3);
+        overflow: hidden;
+      }
+
+      .workspace-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 44px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .view-tab.active {
+        border-color: rgba(76, 201, 240, 0.38);
+        background: rgba(76, 201, 240, 0.11);
+        color: #e8fbff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 12px;
+      }
+
+      th,
+      td {
+        padding: 0 12px;
+        border-bottom: 1px solid var(--line-soft);
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      th {
+        height: 36px;
+        background: var(--surface);
+        color: var(--muted-2);
+        font-weight: 800;
+      }
+
+      td {
+        height: 51px;
+        color: #dce4ee;
+      }
+
+      tr.focus td {
+        background: rgba(76, 201, 240, 0.08);
+      }
+
+      .row-focus {
+        border-left: 3px solid var(--agent);
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .status.observe {
+        background: rgba(125, 137, 154, 0.16);
+        color: #bdc6d4;
+      }
+
+      .status.suggest {
+        background: rgba(91, 140, 255, 0.16);
+        color: #aac1ff;
+      }
+
+      .status.approve {
+        background: rgba(244, 189, 80, 0.16);
+        color: #f5d489;
+      }
+
+      .status.done {
+        background: rgba(69, 212, 131, 0.14);
+        color: #8ce6b3;
+      }
+
+      .status.risk {
+        background: rgba(255, 107, 107, 0.15);
+        color: #ffb1b1;
+      }
+
+      .below {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .panel {
+        min-height: 150px;
+        padding: 15px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface-3);
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .audit-flow {
+        display: grid;
+        grid-template-columns: 74px 1fr;
+        gap: 8px 10px;
+        margin-top: 12px;
+      }
+
+      .flow-time {
+        color: var(--muted-2);
+        font-size: 11px;
+      }
+
+      .flow-item {
+        position: relative;
+        padding-left: 14px;
+        color: #d5dde8;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .flow-item::before {
+        position: absolute;
+        top: 5px;
+        left: 0;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--agent);
+        content: "";
+      }
+
+      .mini-bars {
+        display: flex;
+        align-items: end;
+        gap: 8px;
+        height: 90px;
+        margin-top: 16px;
+      }
+
+      .bar {
+        flex: 1;
+        border-radius: 5px 5px 0 0;
+        background: linear-gradient(180deg, var(--agent), #3577d6);
+      }
+
+      .right {
+        grid-column: 3;
+        padding: 20px 18px;
+        border-left: 1px solid var(--line-soft);
+        background: var(--sidebar);
+        overflow: hidden;
+      }
+
+      .right-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+
+      .right-head h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .queue-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .queue-tab {
+        display: grid;
+        height: 36px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .queue-tab.active {
+        border-color: rgba(244, 189, 80, 0.42);
+        background: rgba(244, 189, 80, 0.12);
+        color: #f5d489;
+      }
+
+      .queue-card,
+      .insight-card,
+      .permission-card,
+      .command-input {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .queue-card {
+        padding: 15px;
+        margin-bottom: 14px;
+      }
+
+      .queue-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .queue-card strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .queue-card p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.56;
+      }
+
+      .evidence {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .evidence span {
+        padding: 9px;
+        border: 1px solid var(--line-soft);
+        border-radius: 7px;
+        background: var(--surface-3);
+        color: #d9e2ee;
+        font-size: 11px;
+        line-height: 1.35;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 28px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--surface-3);
+        color: #dce4ee;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .btn.primary {
+        border-color: rgba(76, 201, 240, 0.48);
+        background: rgba(76, 201, 240, 0.15);
+        color: #e2fbff;
+      }
+
+      .btn.warning {
+        border-color: rgba(244, 189, 80, 0.42);
+        background: rgba(244, 189, 80, 0.13);
+        color: #f5d489;
+      }
+
+      .section-label {
+        margin: 17px 0 10px;
+        color: var(--muted-2);
+        font-size: 11px;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      .insight-card {
+        display: grid;
+        gap: 9px;
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+
+      .insight-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .insight-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .execution-log {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        gap: 9px 10px;
+        margin: 11px 0 0;
+      }
+
+      .execution-log span {
+        color: var(--muted-2);
+        font-size: 11px;
+      }
+
+      .execution-log b {
+        color: #dce4ee;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .permission-card {
+        padding: 12px;
+        margin-top: 14px;
+      }
+
+      .permission-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        height: 26px;
+        color: #dce4ee;
+        font-size: 12px;
+      }
+
+      .permission-row span:last-child {
+        color: var(--green);
+      }
+
+      .command-input {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        height: 44px;
+        margin-top: 14px;
+        padding: 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .pin {
+        position: absolute;
+        z-index: 8;
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 50%;
+        background: #f7f9ff;
+        color: #0d1320;
+        font-size: 12px;
+        font-weight: 850;
+        box-shadow: 0 8px 23px rgba(0, 0, 0, 0.38);
+      }
+
+      .line {
+        position: absolute;
+        z-index: 6;
+        height: 1px;
+        background: rgba(206, 222, 255, 0.46);
+        transform-origin: left center;
+      }
+
+      .callout {
+        position: absolute;
+        z-index: 7;
+        width: 232px;
+        padding: 12px 13px;
+        border: 1px solid rgba(197, 230, 255, 0.28);
+        border-radius: 8px;
+        background: rgba(10, 14, 22, 0.95);
+        box-shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
+      }
+
+      .callout strong {
+        display: block;
+        color: #ffffff;
+        font-size: 13px;
+      }
+
+      .callout p {
+        margin: 6px 0 0;
+        color: #aeb8c8;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .caption {
+        position: absolute;
+        right: 44px;
+        bottom: 14px;
+        color: #667386;
+        font-size: 11px;
+      }
+
+      .theme-light body {
+        background: #eef2f7;
+        color: #111827;
+      }
+
+      .theme-light .stage {
+        background:
+          radial-gradient(circle at 76% 8%, rgba(76, 201, 240, 0.18), transparent 26%),
+          radial-gradient(circle at 36% 92%, rgba(91, 140, 255, 0.12), transparent 24%),
+          linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+      }
+
+      .theme-light .app {
+        border-color: #ccd6e6;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 28px 90px rgba(40, 52, 78, 0.18);
+      }
+
+      .theme-light .sidebar,
+      .theme-light .right {
+        border-color: #d7deea;
+        background: #f3f6fa;
+      }
+
+      .theme-light .brand,
+      .theme-light .topbar,
+      .theme-light .agent-strip,
+      .theme-light .workspace-head,
+      .theme-light th,
+      .theme-light td {
+        border-color: #dfe5ee;
+      }
+
+      .theme-light .topbar {
+        background: rgba(255, 255, 255, 0.94);
+      }
+
+      .theme-light .agent-strip {
+        background: linear-gradient(90deg, rgba(76, 201, 240, 0.12), rgba(91, 140, 255, 0.08));
+      }
+
+      .theme-light .brand-mark {
+        background: linear-gradient(135deg, #0f172a, #2563eb 52%, #06b6d4);
+        color: #ffffff;
+      }
+
+      .theme-light .brand small,
+      .theme-light .nav-title,
+      .theme-light .strip-stat span,
+      .theme-light .metric span,
+      .theme-light th,
+      .theme-light .flow-time,
+      .theme-light .section-label,
+      .theme-light .execution-log span,
+      .theme-light .caption {
+        color: #667085;
+      }
+
+      .theme-light .nav-item {
+        color: #475467;
+      }
+
+      .theme-light .nav-item.active {
+        background: #e8eef7;
+        color: #101828;
+      }
+
+      .theme-light .nav-item.agent {
+        border-color: rgba(6, 182, 212, 0.28);
+        background: rgba(6, 182, 212, 0.1);
+        color: #155e75;
+      }
+
+      .theme-light .count {
+        background: #e7edf5;
+        color: #475467;
+      }
+
+      .theme-light .sidebar-note,
+      .theme-light .metric.agent-metric {
+        border-color: rgba(6, 182, 212, 0.3);
+        background: rgba(6, 182, 212, 0.08);
+      }
+
+      .theme-light .sidebar-note b,
+      .theme-light .mode-chip,
+      .theme-light .view-tab.active,
+      .theme-light .agent-status strong,
+      .theme-light .agent-mark {
+        color: #155e75;
+      }
+
+      .theme-light .sidebar-note p,
+      .theme-light .agent-status small,
+      .theme-light .head p,
+      .theme-light .queue-card p,
+      .theme-light .insight-card p,
+      .theme-light .search,
+      .theme-light .command-input,
+      .theme-light .callout p {
+        color: #667085;
+      }
+
+      .theme-light .search,
+      .theme-light .chip,
+      .theme-light .mode-chip,
+      .theme-light .view-tab,
+      .theme-light .tool,
+      .theme-light .strip-stat,
+      .theme-light .metric,
+      .theme-light .workspace,
+      .theme-light .panel,
+      .theme-light .queue-tab,
+      .theme-light .queue-card,
+      .theme-light .insight-card,
+      .theme-light .permission-card,
+      .theme-light .command-input {
+        border-color: #d3dbe8;
+        background: #ffffff;
+        color: #344054;
+      }
+
+      .theme-light .search {
+        background: #f8fafc;
+      }
+
+      .theme-light .mode-chip,
+      .theme-light .view-tab.active {
+        border-color: rgba(6, 182, 212, 0.32);
+        background: rgba(6, 182, 212, 0.1);
+      }
+
+      .theme-light .chip.primary {
+        border-color: #4167c7;
+        background: #eaf0ff;
+        color: #1d3f91;
+      }
+
+      .theme-light .agent-mark {
+        border-color: rgba(6, 182, 212, 0.38);
+        background: rgba(6, 182, 212, 0.11);
+      }
+
+      .theme-light .workspace,
+      .theme-light .panel {
+        background: #ffffff;
+      }
+
+      .theme-light th {
+        background: #f8fafc;
+      }
+
+      .theme-light td,
+      .theme-light .flow-item,
+      .theme-light .panel-title,
+      .theme-light .queue-card strong,
+      .theme-light .insight-title,
+      .theme-light .permission-row,
+      .theme-light .execution-log b,
+      .theme-light h1,
+      .theme-light .strip-stat b,
+      .theme-light .metric strong {
+        color: #111827;
+      }
+
+      .theme-light tr.focus td {
+        background: #eaf7fb;
+      }
+
+      .theme-light .queue-tab.active {
+        border-color: #f1c66b;
+        background: #fff7e6;
+        color: #92400e;
+      }
+
+      .theme-light .evidence span,
+      .theme-light .btn {
+        border-color: #dce3ee;
+        background: #f8fafc;
+        color: #344054;
+      }
+
+      .theme-light .btn.primary {
+        border-color: rgba(6, 182, 212, 0.36);
+        background: #e8fbff;
+        color: #155e75;
+      }
+
+      .theme-light .btn.warning {
+        border-color: #f1c66b;
+        background: #fff7e6;
+        color: #92400e;
+      }
+
+      .theme-light .status.observe {
+        background: #eef2f7;
+        color: #475467;
+      }
+
+      .theme-light .status.suggest {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+
+      .theme-light .status.approve {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .theme-light .status.done {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .theme-light .status.risk {
+        background: #fee2e2;
+        color: #b42318;
+      }
+
+      .theme-light .callout {
+        border-color: rgba(87, 99, 128, 0.28);
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 16px 42px rgba(42, 52, 75, 0.14);
+      }
+
+      .theme-light .callout strong {
+        color: #111827;
+      }
+
+      .theme-light .line {
+        background: rgba(77, 91, 125, 0.45);
+      }
+
+      .theme-light .pin {
+        border-color: rgba(17, 24, 39, 0.36);
+        background: #111827;
+        color: #ffffff;
+        box-shadow: 0 8px 20px rgba(55, 65, 81, 0.24);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="stage" aria-label="CJClass2 Agent-first v2 annotated demo">
+      <section class="app">
+        <aside class="sidebar">
+          <div class="brand">
+            <div class="brand-mark">AG</div>
+            <span>
+              <strong>启航教务空间</strong>
+              <small>Agent-first v2 工作台</small>
+            </span>
+          </div>
+
+          <div class="nav-title">Business</div>
+          <div class="nav-item active"><span class="nav-left"><i class="dot"></i> 今日工作台</span></div>
+          <div class="nav-item"><span class="nav-left"><i class="dot"></i> 学员数据库</span></div>
+          <div class="nav-item"><span class="nav-left"><i class="dot"></i> 课程与排课</span></div>
+          <div class="nav-item"><span class="nav-left"><i class="dot"></i> 收费与课时</span></div>
+          <div class="nav-item"><span class="nav-left"><i class="dot"></i> 家校通知</span></div>
+
+          <div class="nav-title">Agent Layer</div>
+          <div class="nav-item agent"><span class="nav-left"><i class="dot"></i> Agent 工作台</span><span class="count">8</span></div>
+          <div class="nav-item"><span class="nav-left"><i class="dot"></i> 待审批动作</span><span class="count">5</span></div>
+          <div class="nav-item"><span class="nav-left"><i class="dot"></i> 自动化规则</span><span class="count">12</span></div>
+          <div class="nav-item"><span class="nav-left"><i class="dot"></i> 执行审计</span></div>
+
+          <div class="sidebar-note">
+            <b>Agent 变成系统工作层</b>
+            <p>它参与导航、表格状态、审批队列、对象详情和审计时间线。</p>
+          </div>
+        </aside>
+
+        <header class="topbar">
+          <div class="search">⌘K 搜索学员、课程、订单，或输入“处理本周低课时学生”</div>
+          <div class="top-actions">
+            <span class="mode-chip"><i class="dot agent-dot"></i> Agent 半自动</span>
+            <span class="chip">同步正常</span>
+            <span class="chip primary">+ 新增业务</span>
+          </div>
+        </header>
+
+        <section class="agent-strip">
+          <div class="agent-status">
+            <div class="agent-mark">AI</div>
+            <div>
+              <strong>Agent 正在观察 128 条业务记录</strong>
+              <small>监测低课时、续费机会、欠费、调课冲突和通知草稿</small>
+            </div>
+          </div>
+          <div class="strip-stat"><span>建议中</span><b>4 条</b></div>
+          <div class="strip-stat"><span>待批准</span><b>8 个动作</b></div>
+          <div class="strip-stat"><span>自动执行</span><b>32 次</b></div>
+          <div class="strip-stat"><span>节省时间</span><b>2.4 小时</b></div>
+        </section>
+
+        <section class="main">
+          <div class="head">
+            <div>
+              <div class="kicker">Agent Operations Command Center</div>
+              <h1>今天由 Agent 推动的教务闭环</h1>
+              <p>业务表格仍是中心，但每条记录都能看到 Agent 的观察、建议、审批和执行状态。</p>
+            </div>
+            <span class="chip">本周 Agent 成效</span>
+          </div>
+
+          <div class="metrics">
+            <div class="metric agent-metric"><span>Agent 推动闭环</span><strong>26</strong><small>发现 → 批准 → 执行</small></div>
+            <div class="metric"><span>高价值待批</span><strong>¥18,600</strong><small>续费 / 催缴相关</small></div>
+            <div class="metric"><span>风险提前量</span><strong>7 天</strong><small>低课时断课预警</small></div>
+            <div class="metric"><span>返工率</span><strong>3.8%</strong><small>草稿需大改比例</small></div>
+          </div>
+
+          <div class="workspace">
+            <div class="workspace-head">
+              <div class="view-tabs">
+                <span class="view-tab active">Agent Grid</span>
+                <span class="view-tab">审批队列</span>
+                <span class="view-tab">风险视图</span>
+                <span class="view-tab">执行日志</span>
+              </div>
+              <div class="toolbar">
+                <span class="tool">Filter</span>
+                <span class="tool">Group</span>
+                <span class="tool">Batch approve</span>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 13%">学员</th>
+                  <th style="width: 15%">业务事实</th>
+                  <th style="width: 13%">课时/收费</th>
+                  <th style="width: 19%">Agent 状态</th>
+                  <th style="width: 18%">建议动作</th>
+                  <th style="width: 12%">审批</th>
+                  <th style="width: 10%">负责人</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="focus">
+                  <td class="row-focus">张子涵</td>
+                  <td>英语 · 今天 18:30</td>
+                  <td><span class="status risk">剩 2 节 / 待收</span></td>
+                  <td><span class="status approve">待批准：续费提醒</span></td>
+                  <td>查看草稿并发送给家长</td>
+                  <td>王老师</td>
+                  <td>2m</td>
+                </tr>
+                <tr>
+                  <td>林一诺</td>
+                  <td>数学 · 明天 10:00</td>
+                  <td><span class="status done">已结清</span></td>
+                  <td><span class="status done">已执行：课后反馈</span></td>
+                  <td>反馈已归档到沟通记录</td>
+                  <td>无需</td>
+                  <td>18m</td>
+                </tr>
+                <tr>
+                  <td>周辰</td>
+                  <td>物理 · 周五 19:00</td>
+                  <td><span class="status suggest">请假待补</span></td>
+                  <td><span class="status suggest">建议：调课通知</span></td>
+                  <td>推荐 2 个可用补课时段</td>
+                  <td>李老师</td>
+                  <td>31m</td>
+                </tr>
+                <tr>
+                  <td>许安琪</td>
+                  <td>化学 · 周六 14:00</td>
+                  <td><span class="status approve">待收 ¥900</span></td>
+                  <td><span class="status risk">风险：催缴异常</span></td>
+                  <td>生成账单摘要和催缴草稿</td>
+                  <td>财务</td>
+                  <td>44m</td>
+                </tr>
+                <tr>
+                  <td>赵奕铭</td>
+                  <td>英语 · 周日 15:30</td>
+                  <td><span class="status done">剩 18 节</span></td>
+                  <td><span class="status observe">观察中：无动作</span></td>
+                  <td>保持常规跟进</td>
+                  <td>无需</td>
+                  <td>1h</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="below">
+            <div class="panel">
+              <div class="panel-title">Agent 审计轨迹 <span class="status observe">观察 / 批准 / 执行</span></div>
+              <div class="audit-flow">
+                <div class="flow-time">09:20</div><div class="flow-item">Agent 观察到 6 名学生进入低课时范围，来源：课时余额 + 未来排课。</div>
+                <div class="flow-time">10:05</div><div class="flow-item">为张子涵生成续费提醒草稿，状态：等待王老师审批。</div>
+                <div class="flow-time">10:12</div><div class="flow-item">林一诺课后反馈由陈老师批准，Agent 已归档沟通记录。</div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-title">Agent 业务贡献 <span>近 7 天</span></div>
+              <div class="mini-bars">
+                <div class="bar" style="height: 42%"></div>
+                <div class="bar" style="height: 58%"></div>
+                <div class="bar" style="height: 52%"></div>
+                <div class="bar" style="height: 72%"></div>
+                <div class="bar" style="height: 66%"></div>
+                <div class="bar" style="height: 90%"></div>
+                <div class="bar" style="height: 78%"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="right">
+          <div class="right-head">
+            <h2>Agent Command Center</h2>
+            <span class="status approve">8 待批</span>
+          </div>
+          <div class="queue-tabs">
+            <div class="queue-tab active">待批准</div>
+            <div class="queue-tab">发现</div>
+            <div class="queue-tab">已执行</div>
+          </div>
+
+          <div class="queue-card">
+            <div class="queue-top">
+              <strong>张子涵续费提醒</strong>
+              <span class="status approve">单次审批</span>
+            </div>
+            <p>观察到：剩余 2 节，本周仍有英语课，距上次续费沟通 21 天。建议先由王老师确认草稿。</p>
+            <div class="evidence">
+              <span>课时<br />剩余 2 节</span>
+              <span>金额<br />预计 ¥4,800</span>
+              <span>风险<br />3 天后断课</span>
+            </div>
+            <div class="button-row" style="margin-top: 10px">
+              <span class="btn primary">查看草稿</span>
+              <span class="btn warning">批准发送</span>
+              <span class="btn">暂缓</span>
+            </div>
+          </div>
+
+          <div class="section-label">Agent 发现</div>
+          <div class="insight-card">
+            <div class="insight-title">低课时风险 <span class="status risk">高</span></div>
+            <p>6 名学生将在 7 天内课时不足，预计影响续费金额 ¥18,600。</p>
+          </div>
+          <div class="insight-card">
+            <div class="insight-title">调课冲突 <span class="status suggest">建议</span></div>
+            <p>周辰补课与李老师排班冲突，Agent 已推荐两个可用时段。</p>
+          </div>
+
+          <div class="section-label">执行日志</div>
+          <div class="execution-log">
+            <span>10:12</span><b>归档 1 条课后反馈，由陈老师批准</b>
+            <span>10:05</span><b>生成 3 条续费提醒草稿，等待审批</b>
+            <span>09:20</span><b>自动标记 6 个低课时风险学生</b>
+          </div>
+
+          <div class="permission-card">
+            <div class="permission-row"><span>只读观察</span><span>自动</span></div>
+            <div class="permission-row"><span>对外发送</span><span>需审批</span></div>
+            <div class="permission-row"><span>课时/财务变更</span><span>高风险审批</span></div>
+          </div>
+
+          <div class="command-input">
+            <span>输入指令：帮我处理本周低课时学生</span>
+            <span class="btn primary">运行</span>
+          </div>
+        </aside>
+      </section>
+
+      <span class="pin" style="left: 524px; top: 98px">1</span>
+      <div class="line" style="left: 430px; top: 103px; width: 80px; transform: rotate(-2deg)"></div>
+      <div class="callout" style="left: 214px; top: 69px">
+        <strong>顶部 Agent 状态条</strong>
+        <p>常驻展示模式、观察范围、待批准、执行量和节省时间。</p>
+      </div>
+
+      <span class="pin" style="left: 259px; top: 276px">2</span>
+      <div class="line" style="left: 70px; top: 274px; width: 176px"></div>
+      <div class="callout" style="left: 44px; top: 222px">
+        <strong>左侧 Agent 工作层</strong>
+        <p>新增 Agent 工作台、待审批、自动化规则、执行审计入口。</p>
+      </div>
+
+      <span class="pin" style="left: 596px; top: 371px">3</span>
+      <div class="line" style="left: 373px; top: 366px; width: 211px; transform: rotate(2deg)"></div>
+      <div class="callout" style="left: 44px; top: 326px">
+        <strong>Agent 成效指标</strong>
+        <p>不看使用次数，改看闭环数、金额影响、提前预警和返工率。</p>
+      </div>
+
+      <span class="pin" style="left: 795px; top: 510px">4</span>
+      <div class="line" style="left: 1040px; top: 501px; width: 232px; transform: rotate(178deg)"></div>
+      <div class="callout" style="right: 48px; top: 462px">
+        <strong>表格内嵌 Agent 状态</strong>
+        <p>业务事实和 Agent 行为分列：观察、建议、待批、已执行。</p>
+      </div>
+
+      <span class="pin" style="left: 1166px; top: 190px">5</span>
+      <div class="line" style="left: 1042px; top: 197px; width: 110px"></div>
+      <div class="callout" style="right: 48px; top: 126px">
+        <strong>Agent Command Center</strong>
+        <p>右侧改为工作队列：待审批、发现、执行日志。</p>
+      </div>
+
+      <span class="pin" style="left: 1168px; top: 392px">6</span>
+      <div class="line" style="left: 1040px; top: 398px; width: 115px"></div>
+      <div class="callout" style="right: 48px; top: 342px">
+        <strong>审批卡片有证据链</strong>
+        <p>每个动作说明观察、影响、风险和审批按钮。</p>
+      </div>
+
+      <span class="pin" style="left: 471px; top: 802px">7</span>
+      <div class="line" style="left: 208px; top: 797px; width: 249px; transform: rotate(2deg)"></div>
+      <div class="callout" style="left: 44px; top: 754px">
+        <strong>可审计人机协作</strong>
+        <p>时间线区分 Agent 观察、人工批准、Agent 执行和结果回写。</p>
+      </div>
+
+      <span class="pin" style="left: 1216px; top: 840px">8</span>
+      <div class="line" style="left: 1042px; top: 834px; width: 160px"></div>
+      <div class="callout" style="right: 48px; top: 790px">
+        <strong>权限与指令降权</strong>
+        <p>只读自动；对外发送和课时财务变更必须审批。聊天只做补充入口。</p>
+      </div>
+
+      <div class="caption">CJClass2 Agent-first v2 · business workspace + agent work layer</div>
+    </main>
+  </body>
+</html>

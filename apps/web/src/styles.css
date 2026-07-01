@@ -510,7 +510,7 @@ button:disabled {
 }
 
 .panel {
-  padding: 20px;
+  padding: 28px;
 }
 
 .panel-title {
@@ -1708,38 +1708,185 @@ button:disabled {
   color: var(--muted);
 }
 
-.progress-list {
+/* ─── Payroll & Reminder Panel (Redesigned) ─── */
+
+.payroll-section {
   display: grid;
-  gap: 24px;
-  padding-top: 26px;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
 }
 
-.progress-row {
-  display: grid;
-  grid-template-columns: 70px minmax(150px, 1fr) 64px 80px;
-  gap: 18px;
+.payroll-card {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.payroll-card:hover {
+  background: var(--blue-soft);
+  border-color: rgba(14, 165, 233, 0.25);
+  box-shadow: 0 2px 12px rgba(14, 165, 233, 0.08);
+}
+
+.payroll-card-header {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
-.progress-row div {
-  height: 12px;
-  background: #e8edf4;
-  border-radius: 10px;
+.payroll-teacher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.payroll-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #38bdf8, var(--blue));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.payroll-teacher strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.payroll-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.payroll-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.payroll-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.payroll-bar-track {
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
   overflow: hidden;
 }
 
-.progress-row i {
-  display: block;
+.payroll-bar-fill {
   height: 100%;
-  background: var(--blue);
+  background: linear-gradient(90deg, #38bdf8 0%, var(--blue) 100%);
   border-radius: inherit;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.insight-row {
-  grid-template-columns: 12px minmax(0, 1fr);
+.payroll-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 16px 0;
+  text-align: center;
+}
+
+/* ─── Reminder Cards ─── */
+
+.reminder-section {
+  display: grid;
+  gap: 8px;
+}
+
+.reminder-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text);
+  font: inherit;
+  width: 100%;
+}
+
+.reminder-card:hover {
+  background: var(--surface-soft);
+  border-color: var(--line-strong);
+  transform: translateX(2px);
+}
+
+.reminder-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+  background: #cbd5e1;
+}
+
+.reminder-dot.orange { background: var(--orange); }
+.reminder-dot.red { background: var(--red); }
+.reminder-dot.blue { background: var(--blue); }
+.reminder-dot.green { background: var(--green); }
+.reminder-dot.purple { background: var(--purple); }
+
+.reminder-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-content strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.reminder-content p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.reminder-arrow {
+  flex-shrink: 0;
+  color: var(--muted-light);
+  margin-top: 4px;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: all 0.2s ease;
+}
+
+.reminder-card:hover .reminder-arrow {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .entry-layout {
@@ -2644,6 +2791,15 @@ button:disabled {
   .progress-row,
   .insight-row {
     grid-template-columns: 1fr;
+  }
+
+  .progress-header {
+    display: none;
+  }
+
+  .progress-row small,
+  .progress-row b {
+    text-align: left;
   }
 
 

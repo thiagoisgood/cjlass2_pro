@@ -58,28 +58,35 @@ export function ReportsPage({ snapshot, dashboard, reports, ledgerSummaries, mon
           <div className="chart-labels"><span>周一</span><span>周三</span><span>周五</span><span>周日</span></div>
         </Panel>
         <Panel title="课酬与提醒" icon={Receipt}>
-          <div className="progress-list">
+          <div className="payroll-section">
             {teacherPayroll.length ? (
               teacherPayroll.map((row) => (
-                <div className="progress-row" key={row.teacher}>
-                  <strong>{row.teacher}</strong>
-                  <div>
-                    <i style={{ width: `${Math.min(100, (row.lessons || 0) * 8)}%` }} />
+                <div className="payroll-card" key={row.teacher}>
+                  <div className="payroll-card-header">
+                    <div className="payroll-teacher">
+                      <span className="payroll-avatar">{row.teacher?.charAt(0)}</span>
+                      <strong>{row.teacher}</strong>
+                    </div>
+                    <div className="payroll-stats">
+                      <span className="payroll-pill">{row.lessons} 节课</span>
+                      <span className="payroll-amount">{currency(row.pay)}</span>
+                    </div>
                   </div>
-                  <small>{row.lessons} 节课</small>
-                  <b>{currency(row.pay)}</b>
+                  <div className="payroll-bar-track">
+                    <div className="payroll-bar-fill" style={{ width: `${Math.min(100, (row.lessons || 0) * 8)}%` }} />
+                  </div>
                 </div>
               ))
             ) : (
-              <div style={{ color: "var(--muted)", padding: "8px" }}>暂无课酬汇总</div>
+              <div className="payroll-empty">暂无课酬汇总</div>
             )}
           </div>
-          <div className="insight-list">
+          <div className="reminder-section">
             {reminders.length ? (
               reminders.map((item) => (
                 <button
                   key={item.title}
-                  className="insight-row"
+                  className="reminder-card"
                   type="button"
                   onClick={() =>
                     setView(
@@ -91,15 +98,16 @@ export function ReportsPage({ snapshot, dashboard, reports, ledgerSummaries, mon
                     )
                   }
                 >
-                  <span className={`bullet-dot ${item.tone || "gray"}`} />
-                  <span>
+                  <span className={`reminder-dot ${item.tone || "gray"}`} />
+                  <div className="reminder-content">
                     <strong>{item.title}</strong>
                     <p>{item.text}</p>
-                  </span>
+                  </div>
+                  <svg className="reminder-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
               ))
             ) : (
-              <div style={{ color: "var(--muted)", padding: "8px" }}>暂无预警信息</div>
+              <div className="payroll-empty">暂无预警信息</div>
             )}
           </div>
         </Panel>

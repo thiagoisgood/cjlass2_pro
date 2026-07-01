@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CJClass2 UI Demo - Linear x Airtable</title>
+    <script>
+      if (new URLSearchParams(window.location.search).get("theme") === "light") {
+        document.documentElement.classList.add("theme-light");
+      }
+    </script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #08090d;
+        --panel: #0f1117;
+        --panel-2: #141821;
+        --panel-3: #191f2a;
+        --line: #252b36;
+        --line-soft: #1b202b;
+        --text: #f5f7fb;
+        --muted: #9aa4b2;
+        --muted-2: #687385;
+        --blue: #5b8cff;
+        --cyan: #4cc9f0;
+        --green: #45d483;
+        --yellow: #f0c24b;
+        --red: #ff6b6b;
+        --violet: #a98bff;
+        --orange: #ff9f43;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #05060a;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+          sans-serif;
+        color: var(--text);
+      }
+
+      .stage {
+        position: relative;
+        width: 1440px;
+        height: 1024px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 80% 12%, rgba(91, 140, 255, 0.14), transparent 26%),
+          linear-gradient(180deg, #0b0d13 0%, #07080c 100%);
+      }
+
+      .app {
+        position: absolute;
+        inset: 34px 34px 34px 34px;
+        display: grid;
+        grid-template-columns: 232px 1fr 318px;
+        grid-template-rows: 62px 1fr;
+        border: 1px solid #202634;
+        background: rgba(10, 12, 18, 0.96);
+        box-shadow: 0 28px 100px rgba(0, 0, 0, 0.45);
+      }
+
+      .sidebar {
+        grid-row: 1 / 3;
+        border-right: 1px solid var(--line-soft);
+        background: #0b0d13;
+        padding: 18px 14px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px 18px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #ffffff, #9fb9ff);
+        color: #0d1020;
+        font-weight: 800;
+      }
+
+      .brand strong,
+      .nav-title,
+      .section-title,
+      .table-title,
+      .panel-title,
+      .callout strong {
+        letter-spacing: 0;
+      }
+
+      .brand strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .brand span:last-child {
+        min-width: 0;
+      }
+
+      .brand small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted-2);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .nav-title {
+        margin: 18px 8px 8px;
+        color: var(--muted-2);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        height: 34px;
+        margin: 3px 0;
+        padding: 0 9px;
+        border-radius: 7px;
+        color: #c9d0db;
+        font-size: 13px;
+      }
+
+      .nav-item.active {
+        background: #171b24;
+        color: #fff;
+      }
+
+      .nav-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted-2);
+      }
+
+      .nav-item.active .nav-dot {
+        background: var(--blue);
+        box-shadow: 0 0 0 4px rgba(91, 140, 255, 0.16);
+      }
+
+      .sidebar-card {
+        margin-top: 24px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        background: #10141c;
+        border-radius: 8px;
+      }
+
+      .sidebar-card b {
+        display: block;
+        font-size: 12px;
+      }
+
+      .sidebar-card p {
+        margin: 6px 0 0;
+        color: var(--muted-2);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .topbar {
+        grid-column: 2 / 4;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid var(--line-soft);
+        padding: 0 20px;
+        background: rgba(13, 16, 23, 0.9);
+      }
+
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 470px;
+        height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #090b10;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .chip,
+      .view-tab,
+      .toolbar-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #10141b;
+        color: #c8d0dc;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .chip.primary {
+        border-color: #4167c7;
+        background: #1a2d55;
+        color: #e9f0ff;
+      }
+
+      .main {
+        grid-column: 2;
+        padding: 20px 20px 18px;
+        overflow: hidden;
+      }
+
+      .page-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      .page-kicker {
+        color: var(--muted-2);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 5px 0 6px;
+        font-size: 28px;
+        line-height: 1.1;
+        font-weight: 720;
+      }
+
+      .page-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+
+      .metric {
+        min-height: 78px;
+        padding: 13px;
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        background: #0f131b;
+      }
+
+      .metric span {
+        color: var(--muted-2);
+        font-size: 12px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 24px;
+        font-weight: 760;
+      }
+
+      .metric small {
+        display: block;
+        margin-top: 6px;
+        color: var(--green);
+        font-size: 11px;
+      }
+
+      .workspace {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #0d1017;
+        overflow: hidden;
+      }
+
+      .workspace-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 46px;
+        padding: 0 13px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .view-tabs,
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .view-tab.active {
+        border-color: #3c4659;
+        background: #1a202b;
+        color: #fff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 12px;
+      }
+
+      th {
+        height: 38px;
+        color: var(--muted-2);
+        font-weight: 700;
+        text-align: left;
+        background: #10141c;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line-soft);
+        padding: 0 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      td {
+        height: 48px;
+        color: #dce3ee;
+      }
+
+      tr.active-row td {
+        background: rgba(91, 140, 255, 0.08);
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: 11px;
+      }
+
+      .status.green {
+        background: rgba(69, 212, 131, 0.14);
+        color: #89e6b0;
+      }
+
+      .status.blue {
+        background: rgba(91, 140, 255, 0.14);
+        color: #a9c0ff;
+      }
+
+      .status.yellow {
+        background: rgba(240, 194, 75, 0.13);
+        color: #f2d37a;
+      }
+
+      .status.red {
+        background: rgba(255, 107, 107, 0.14);
+        color: #ffabab;
+      }
+
+      .below-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .mini-panel {
+        min-height: 142px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #0d1017;
+        padding: 13px;
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #e8edf5;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .timeline {
+        display: grid;
+        grid-template-columns: 74px 1fr;
+        gap: 8px 10px;
+        margin-top: 13px;
+      }
+
+      .time {
+        color: var(--muted-2);
+        font-size: 11px;
+      }
+
+      .event {
+        position: relative;
+        padding-left: 12px;
+        color: #cfd7e2;
+        font-size: 12px;
+      }
+
+      .event::before {
+        position: absolute;
+        top: 4px;
+        left: 0;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--blue);
+        content: "";
+      }
+
+      .bar-chart {
+        display: flex;
+        align-items: end;
+        gap: 8px;
+        height: 92px;
+        margin-top: 16px;
+      }
+
+      .bar {
+        flex: 1;
+        border-radius: 5px 5px 0 0;
+        background: linear-gradient(180deg, #5b8cff, #2c4e9b);
+      }
+
+      .inspector {
+        grid-column: 3;
+        border-left: 1px solid var(--line-soft);
+        background: #0b0d13;
+        padding: 20px 16px;
+        overflow: hidden;
+      }
+
+      .student-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #10141c;
+        padding: 14px;
+      }
+
+      .avatar-line {
+        display: flex;
+        gap: 11px;
+        align-items: center;
+      }
+
+      .avatar {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border-radius: 50%;
+        background: #23304a;
+        color: #d7e3ff;
+        font-weight: 800;
+      }
+
+      .student-card h2 {
+        margin: 0;
+        font-size: 17px;
+      }
+
+      .student-card p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .detail {
+        padding: 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: 7px;
+        background: #0c0f15;
+      }
+
+      .detail span {
+        color: var(--muted-2);
+        font-size: 11px;
+      }
+
+      .detail b {
+        display: block;
+        margin-top: 5px;
+        font-size: 15px;
+      }
+
+      .assistant-panel,
+      .audit-panel {
+        margin-top: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #10141c;
+        padding: 13px;
+      }
+
+      .assistant-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .prompt {
+        margin-top: 12px;
+        padding: 11px;
+        border: 1px solid #28344b;
+        border-radius: 7px;
+        background: #0b1020;
+        color: #dce7ff;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .action-list {
+        margin-top: 11px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .action {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        min-height: 38px;
+        padding: 9px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: 7px;
+        background: #0d1017;
+        font-size: 12px;
+      }
+
+      .audit-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 30px;
+        color: #cfd7e2;
+        font-size: 12px;
+      }
+
+      .audit-row span:last-child {
+        color: var(--green);
+      }
+
+      .pin {
+        position: absolute;
+        z-index: 5;
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        background: #f7f9ff;
+        color: #10141c;
+        font-size: 12px;
+        font-weight: 800;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38);
+      }
+
+      .callout {
+        position: absolute;
+        z-index: 4;
+        width: 218px;
+        padding: 10px 11px;
+        border: 1px solid rgba(197, 210, 255, 0.26);
+        border-radius: 8px;
+        background: rgba(12, 15, 22, 0.94);
+        box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35);
+      }
+
+      .callout strong {
+        display: block;
+        color: #fff;
+        font-size: 13px;
+      }
+
+      .callout p {
+        margin: 5px 0 0;
+        color: #aeb8c8;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .line {
+        position: absolute;
+        z-index: 3;
+        height: 1px;
+        background: rgba(206, 217, 255, 0.45);
+        transform-origin: left center;
+      }
+
+      .badge-ai {
+        color: var(--cyan);
+      }
+
+      .caption {
+        position: absolute;
+        right: 44px;
+        bottom: 14px;
+        color: #6d7685;
+        font-size: 11px;
+      }
+
+      .theme-light body {
+        background: #eef1f5;
+        color: #111827;
+      }
+
+      .theme-light .stage {
+        background:
+          radial-gradient(circle at 80% 10%, rgba(91, 140, 255, 0.18), transparent 25%),
+          linear-gradient(180deg, #f7f8fb 0%, #eceff4 100%);
+      }
+
+      .theme-light .app {
+        border-color: #cfd6e3;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 28px 90px rgba(37, 49, 76, 0.18);
+      }
+
+      .theme-light .sidebar,
+      .theme-light .inspector {
+        border-color: #d9dee8;
+        background: #f3f5f8;
+      }
+
+      .theme-light .brand {
+        border-color: #d9dee8;
+      }
+
+      .theme-light .brand-mark {
+        background: linear-gradient(135deg, #111827, #4d72d8);
+        color: #ffffff;
+      }
+
+      .theme-light .brand small,
+      .theme-light .nav-title,
+      .theme-light .metric span,
+      .theme-light th,
+      .theme-light .time,
+      .theme-light .detail span,
+      .theme-light .caption {
+        color: #687386;
+      }
+
+      .theme-light .nav-item {
+        color: #485569;
+      }
+
+      .theme-light .nav-item.active {
+        background: #e6ebf4;
+        color: #111827;
+      }
+
+      .theme-light .sidebar-card,
+      .theme-light .metric,
+      .theme-light .workspace,
+      .theme-light .mini-panel,
+      .theme-light .student-card,
+      .theme-light .assistant-panel,
+      .theme-light .audit-panel {
+        border-color: #d5dbe7;
+        background: #ffffff;
+      }
+
+      .theme-light .sidebar-card p,
+      .theme-light .page-head p,
+      .theme-light .search,
+      .theme-light .student-card p,
+      .theme-light .callout p {
+        color: #667085;
+      }
+
+      .theme-light .topbar {
+        border-color: #d9dee8;
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      .theme-light .search {
+        border-color: #cfd6e3;
+        background: #f8fafc;
+      }
+
+      .theme-light .chip,
+      .theme-light .view-tab,
+      .theme-light .toolbar-button {
+        border-color: #d2d9e5;
+        background: #f8fafc;
+        color: #344054;
+      }
+
+      .theme-light .chip.primary {
+        border-color: #4167c7;
+        background: #eaf0ff;
+        color: #1d3f91;
+      }
+
+      .theme-light .workspace-head,
+      .theme-light th,
+      .theme-light td {
+        border-color: #e2e7f0;
+      }
+
+      .theme-light th {
+        background: #f7f9fc;
+      }
+
+      .theme-light td,
+      .theme-light .event,
+      .theme-light .audit-row,
+      .theme-light .panel-title,
+      .theme-light .student-card h2 {
+        color: #202938;
+      }
+
+      .theme-light tr.active-row td {
+        background: #edf3ff;
+      }
+
+      .theme-light .view-tab.active {
+        border-color: #b9c4d5;
+        background: #e7edf7;
+        color: #111827;
+      }
+
+      .theme-light .detail,
+      .theme-light .action {
+        border-color: #dce2ec;
+        background: #f8fafc;
+      }
+
+      .theme-light .prompt {
+        border-color: #b9c9ee;
+        background: #f0f5ff;
+        color: #1f3d7a;
+      }
+
+      .theme-light .callout {
+        border-color: rgba(80, 95, 130, 0.28);
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 16px 42px rgba(41, 51, 73, 0.14);
+      }
+
+      .theme-light .callout strong {
+        color: #111827;
+      }
+
+      .theme-light .line {
+        background: rgba(77, 91, 125, 0.45);
+      }
+
+      .theme-light .pin {
+        border-color: rgba(17, 24, 39, 0.36);
+        background: #111827;
+        color: #ffffff;
+        box-shadow: 0 8px 20px rgba(55, 65, 81, 0.24);
+      }
+
+      .theme-light .status.green {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .theme-light .status.blue {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+
+      .theme-light .status.yellow {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .theme-light .status.red {
+        background: #fee2e2;
+        color: #b42318;
+      }
+
+      .theme-light .bar {
+        background: linear-gradient(180deg, #5b8cff, #2856c6);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="stage" aria-label="CJClass2 Linear Airtable UI demo">
+      <section class="app">
+        <aside class="sidebar">
+          <div class="brand">
+            <div class="brand-mark">C2</div>
+            <span>
+              <strong>启航教务空间</strong>
+              <small>独立教师 · 小机构</small>
+            </span>
+          </div>
+
+          <div class="nav-title">Workspace</div>
+          <div class="nav-item active"><i class="nav-dot"></i> 总览工作台</div>
+          <div class="nav-item"><i class="nav-dot"></i> 今日课表</div>
+          <div class="nav-item"><i class="nav-dot"></i> 学员数据库</div>
+          <div class="nav-item"><i class="nav-dot"></i> 收费与课时</div>
+          <div class="nav-item"><i class="nav-dot"></i> 家校通知</div>
+
+          <div class="nav-title">Views</div>
+          <div class="nav-item"><i class="nav-dot"></i> 续费风险</div>
+          <div class="nav-item"><i class="nav-dot"></i> 低课时学员</div>
+          <div class="nav-item"><i class="nav-dot"></i> 待确认调课</div>
+          <div class="nav-item"><i class="nav-dot"></i> 生产通道</div>
+
+          <div class="sidebar-card">
+            <b>Linear 式低噪声导航</b>
+            <p>把页面改成“业务空间 + 视图”的结构，减少散乱入口。</p>
+          </div>
+        </aside>
+
+        <header class="topbar">
+          <div class="search">⌘K 搜索学员、课程、订单，或输入“帮张子涵调课”</div>
+          <div class="top-actions">
+            <span class="chip">同步正常</span>
+            <span class="chip">审计流水 128</span>
+            <span class="chip primary">+ 新增业务</span>
+          </div>
+        </header>
+
+        <section class="main">
+          <div class="page-head">
+            <div>
+              <div class="page-kicker">Operations Command Center</div>
+              <h1>今天需要处理的教务闭环</h1>
+              <p>课程、学员、课时、收款和通知在同一个 Airtable 式业务表中联动。</p>
+            </div>
+            <div class="chip">本周视图</div>
+          </div>
+
+          <div class="metrics">
+            <div class="metric"><span>今日课程</span><strong>12</strong><small>3 节待点名</small></div>
+            <div class="metric"><span>待确认业务</span><strong>8</strong><small>调课 / 请假 / 补课</small></div>
+            <div class="metric"><span>低课时学员</span><strong>6</strong><small>建议触发续费提醒</small></div>
+            <div class="metric"><span>本周收款</span><strong>¥18,600</strong><small>较上周 +12%</small></div>
+          </div>
+
+          <div class="workspace">
+            <div class="workspace-head">
+              <div class="view-tabs">
+                <span class="view-tab active">Grid</span>
+                <span class="view-tab">Kanban</span>
+                <span class="view-tab">Calendar</span>
+                <span class="view-tab">Finance</span>
+              </div>
+              <div class="toolbar">
+                <span class="toolbar-button">Filter</span>
+                <span class="toolbar-button">Group</span>
+                <span class="toolbar-button">Automate</span>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 16%">学员</th>
+                  <th style="width: 18%">下一节课</th>
+                  <th style="width: 15%">课时状态</th>
+                  <th style="width: 16%">收费状态</th>
+                  <th style="width: 17%">通知草稿</th>
+                  <th style="width: 18%">负责人 / 更新时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="active-row">
+                  <td>张子涵</td>
+                  <td>英语 · 今天 18:30</td>
+                  <td><span class="status red">剩余 2 节</span></td>
+                  <td><span class="status yellow">待收 ¥1,800</span></td>
+                  <td><span class="status blue">续费提醒已生成</span></td>
+                  <td>王老师 · 2m</td>
+                </tr>
+                <tr>
+                  <td>林一诺</td>
+                  <td>数学 · 明天 10:00</td>
+                  <td><span class="status green">剩余 14 节</span></td>
+                  <td><span class="status green">已结清</span></td>
+                  <td>课后反馈待确认</td>
+                  <td>陈老师 · 18m</td>
+                </tr>
+                <tr>
+                  <td>周辰</td>
+                  <td>物理 · 周五 19:00</td>
+                  <td><span class="status blue">请假待补</span></td>
+                  <td><span class="status green">已结清</span></td>
+                  <td>调课通知待发送</td>
+                  <td>李老师 · 31m</td>
+                </tr>
+                <tr>
+                  <td>许安琪</td>
+                  <td>化学 · 周六 14:00</td>
+                  <td><span class="status yellow">剩余 5 节</span></td>
+                  <td><span class="status yellow">待收 ¥900</span></td>
+                  <td>催缴草稿待确认</td>
+                  <td>王老师 · 44m</td>
+                </tr>
+                <tr>
+                  <td>赵奕铭</td>
+                  <td>英语 · 周日 15:30</td>
+                  <td><span class="status green">剩余 18 节</span></td>
+                  <td><span class="status green">已结清</span></td>
+                  <td>无需通知</td>
+                  <td>系统 · 1h</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="below-grid">
+            <div class="mini-panel">
+              <div class="panel-title">智能处理时间线 <span class="badge-ai">Agent</span></div>
+              <div class="timeline">
+                <div class="time">09:20</div><div class="event">低课时学员已进入续费视图</div>
+                <div class="time">10:05</div><div class="event">张子涵催缴草稿生成，等待人工确认</div>
+                <div class="time">11:40</div><div class="event">调课申请转为待办，关联原课程</div>
+              </div>
+            </div>
+            <div class="mini-panel">
+              <div class="panel-title">经营趋势 <span>近 7 天</span></div>
+              <div class="bar-chart">
+                <div class="bar" style="height: 44%"></div>
+                <div class="bar" style="height: 62%"></div>
+                <div class="bar" style="height: 48%"></div>
+                <div class="bar" style="height: 72%"></div>
+                <div class="bar" style="height: 58%"></div>
+                <div class="bar" style="height: 88%"></div>
+                <div class="bar" style="height: 76%"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="inspector">
+          <div class="student-card">
+            <div class="avatar-line">
+              <div class="avatar">张</div>
+              <div>
+                <h2>张子涵</h2>
+                <p>七年级 · 英语 · 续费高优先级</p>
+              </div>
+            </div>
+            <div class="detail-grid">
+              <div class="detail"><span>剩余课时</span><b>2 节</b></div>
+              <div class="detail"><span>待收款</span><b>¥1,800</b></div>
+              <div class="detail"><span>最近到课</span><b>92%</b></div>
+              <div class="detail"><span>沟通状态</span><b>待确认</b></div>
+            </div>
+          </div>
+
+          <div class="assistant-panel">
+            <div class="assistant-title">AI 业务助手 <span class="status blue">受控执行</span></div>
+            <div class="prompt">“帮张子涵生成续费提醒，并检查今晚课程是否需要调整。”</div>
+            <div class="action-list">
+              <div class="action"><span>生成家长通知草稿</span><span>待确认</span></div>
+              <div class="action"><span>创建续费跟进任务</span><span>已关联</span></div>
+              <div class="action"><span>写入审计流水</span><span>自动</span></div>
+            </div>
+          </div>
+
+          <div class="audit-panel">
+            <div class="assistant-title">生产安全</div>
+            <div class="audit-row"><span>微信通道</span><span>Connected</span></div>
+            <div class="audit-row"><span>短信通道</span><span>Sandbox</span></div>
+            <div class="audit-row"><span>数据库写入</span><span>Audited</span></div>
+            <div class="audit-row"><span>权限范围</span><span>Teacher</span></div>
+          </div>
+        </aside>
+      </section>
+
+      <span class="pin" style="left: 252px; top: 115px">1</span>
+      <div class="line" style="left: 70px; top: 128px; width: 170px"></div>
+      <div class="callout" style="left: 44px; top: 92px">
+        <strong>业务空间导航</strong>
+        <p>按工作台、课表、学员、收费、通知组织，而不是堆按钮。</p>
+      </div>
+
+      <span class="pin" style="left: 545px; top: 91px">2</span>
+      <div class="line" style="left: 542px; top: 74px; width: 202px; transform: rotate(-7deg)"></div>
+      <div class="callout" style="left: 726px; top: 38px">
+        <strong>全局命令搜索</strong>
+        <p>Linear 式 ⌘K：搜索对象，也能输入自然语言业务指令。</p>
+      </div>
+
+      <span class="pin" style="left: 387px; top: 236px">3</span>
+      <div class="line" style="left: 212px; top: 229px; width: 162px; transform: rotate(4deg)"></div>
+      <div class="callout" style="left: 36px; top: 194px">
+        <strong>关键经营指标</strong>
+        <p>今日课程、待确认业务、课时风险、收款汇总放在第一屏。</p>
+      </div>
+
+      <span class="pin" style="left: 627px; top: 355px">4</span>
+      <div class="line" style="left: 1164px; top: 344px; width: 168px; transform: rotate(177deg)"></div>
+      <div class="callout" style="right: 46px; top: 304px">
+        <strong>Airtable 式视图切换</strong>
+        <p>同一批业务数据支持表格、看板、日历和财务视图。</p>
+      </div>
+
+      <span class="pin" style="left: 656px; top: 469px">5</span>
+      <div class="line" style="left: 214px; top: 456px; width: 430px; transform: rotate(2deg)"></div>
+      <div class="callout" style="left: 48px; top: 420px">
+        <strong>业务数据表</strong>
+        <p>学员、课程、课时、收费、通知合并成可筛选的业务记录。</p>
+      </div>
+
+      <span class="pin" style="left: 912px; top: 470px">6</span>
+      <div class="line" style="left: 1031px; top: 474px; width: 178px; transform: rotate(-2deg)"></div>
+      <div class="callout" style="right: 42px; top: 432px">
+        <strong>异常状态突出</strong>
+        <p>低课时、待收款、通知草稿用状态胶囊直接暴露风险。</p>
+      </div>
+
+      <span class="pin" style="left: 1175px; top: 245px">7</span>
+      <div class="line" style="left: 1042px; top: 252px; width: 120px"></div>
+      <div class="callout" style="right: 48px; top: 202px">
+        <strong>对象详情侧栏</strong>
+        <p>点表格行后，右侧展示学员详情、课时、待收和沟通状态。</p>
+      </div>
+
+      <span class="pin" style="left: 1185px; top: 545px">8</span>
+      <div class="line" style="left: 1044px; top: 558px; width: 129px"></div>
+      <div class="callout" style="right: 48px; top: 522px">
+        <strong>AI 业务助手</strong>
+        <p>生成调课、催缴、课后反馈等草稿，但保留人工确认。</p>
+      </div>
+
+      <span class="pin" style="left: 451px; top: 812px">9</span>
+      <div class="line" style="left: 218px; top: 806px; width: 219px; transform: rotate(2deg)"></div>
+      <div class="callout" style="left: 44px; top: 764px">
+        <strong>处理时间线</strong>
+        <p>把自动化和人工动作串起来，避免“不知道系统做了什么”。</p>
+      </div>
+
+      <span class="pin" style="left: 1183px; top: 829px">10</span>
+      <div class="line" style="left: 1043px; top: 837px; width: 127px"></div>
+      <div class="callout" style="right: 48px; top: 796px">
+        <strong>安全与审计</strong>
+        <p>通道状态、权限、写入审计始终可见，适合生产环境。</p>
+      </div>
+
+      <div class="caption">CJClass2 UI demo · Linear workflow structure + Airtable data views</div>
+    </main>
+  </body>
+</html>
